@@ -1,0 +1,30 @@
+Options -MultiViews -Indexes
+RewriteEngine On
+RewriteBase /
+
+# 1. Allow all static files in _expo and assets directories
+# This ensures that even if the server has global restrictions on underscores, these are allowed.
+<FilesMatch "\.(js|css|png|jpg|jpeg|gif|ico|svg|ttf|woff|woff2|eot|otf|json|webp)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Allow from all
+    </IfModule>
+</FilesMatch>
+
+# 2. Specifically allow the _expo directory
+RewriteRule ^_expo/ - [L]
+
+# 3. ── Proxy API requests to Node.js on port 5180 ─────────────────────────────
+RewriteCond %{REQUEST_URI} ^/api/
+RewriteRule ^(.*)$ http://127.0.0.1:5180/$1 [P,L]
+
+# 4. ── Serve real files and directories directly ───────────────────────────────
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# 5. ── SPA fallback ─────────────────────────────────────────────────────────────
+# Redirect all other requests to index.html for React Navigation/Expo Router
+RewriteRule ^ index.html [L]

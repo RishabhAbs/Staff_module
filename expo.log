@@ -1,0 +1,18 @@
+Starting project at C:\Users\DELL\Desktop\Staff_module
+Starting Metro Bundler
+Skipping dependency validation in offline mode
+Waiting on http://localhost:8081
+Logs for your project will appear below.
+Web .\index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 2149ms index.js (1141 modules)
+ LOG  [web] Logs will appear in the browser console
+Web src\navigation\AdminNavigator.js ▓▓▓▓▓▓▓░░░░░░░░░ 46.6% (241/353)
+Web Bundled 797ms src\navigation\AdminNavigator.js (677 modules)
+Web .\index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 89ms index.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web Bundled 59ms src\navigation\AdminNavigator.js (1 module)
+Web .\index.js ░░░░░░░░░░░░░░░░  0.0% (0/1)
+Web Bundled 117ms index.js (1 module)
+ LOG  [web] Logs will appear in the browser console
+Web Bundled 81ms src\navigation\AdminNavigator.js (1 module)

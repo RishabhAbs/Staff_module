@@ -1,0 +1,7 @@
+--- CPANEL DIAGNOSTICS START ---
+[_expo] directory does not exist at: C:\Users\DELL\Desktop\Staff_module\_expo
+--- CPANEL DIAGNOSTICS END ---
+Running database migrations...
+Admin password refreshed
+Migrations completed successfully.
+ABS Staff backend running on port 5280
