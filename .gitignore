@@ -1,13 +1,33 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# Dependencies
 node_modules/
+backend/node_modules/
 
-# Expo
+# Expo build output
 .expo/
 dist/
 web-build/
+_expo/
+_expo_build/
 expo-env.d.ts
+
+# Environment files — never commit secrets
+.env
+.env.local
+.env*.local
+backend/.env
+
+# Logs
+*.log
+expo.err
+expo.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# OS / Windows files
+.DS_Store
+Thumbs.db
+*.lnk
 
 # Native
 .kotlin/
@@ -17,25 +37,37 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+/ios
+/android
 
 # Metro
 .metro-health-check*
 
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env*.local
-
-# typescript
+# TypeScript
 *.tsbuildinfo
 
-# generated native folders
-/ios
-/android
+# Deploy artifacts
+*.zip
+deploy_*/
+deploy_old_verify/
+deploy_verify/
+test_check/
+
+# One-off build scripts
+fix-expo-build.js
+flatten.js
+flatten_assets.js
+flatten_build.js
+prepare_deploy.js
+
+# cPanel specific
+.htaccess
+
+# Tailwind (not used in RN)
+tailwind.config.js
+
+# Claude AI session cache
+.claude/
+
+# Uploads (use S3 in production)
+backend/uploads/
