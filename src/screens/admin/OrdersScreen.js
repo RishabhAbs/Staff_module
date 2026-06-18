@@ -153,6 +153,7 @@ function CreateOrderModal({ visible, onClose, onCreated }) {
   const [saving, setSaving]           = useState(false);
   const [allLedgers, setAllLedgers]   = useState([]);
   const [allItems, setAllItems]       = useState([]);
+  const [itemModal, setItemModal]     = useState(null);
 
   useEffect(() => {
     if (visible) {
@@ -178,8 +179,32 @@ function CreateOrderModal({ visible, onClose, onCreated }) {
   };
 
   const addItem = (item) => {
-    setOrderItems(prev => [...prev, { item_id: item.id, item_name: item.name, unit: item.unit || '', quantity: '1', price: '' }]);
+    setItemModal({ item_id: item.id, item_name: item.name, unit: item.unit || '',
+      feet: '', inch: '', length: '', width: '', totalRnft: '', sqm: '', rnmt: '', rnft: '', bundle: '', quantity: '1', rate: '', discount: '', total: '' });
     setItemSearch(''); setItemSugg([]);
+  };
+
+  const updateItemModal = (key, val) => {
+    setItemModal(prev => {
+      const next = { ...prev, [key]: val };
+      const rate = parseFloat(next.rate) || 0;
+      const qty = parseFloat(next.quantity) || 0;
+      const disc = parseFloat(next.discount) || 0;
+      next.total = String(((rate * qty) - (rate * qty * disc / 100)).toFixed(2));
+      return next;
+    });
+  };
+
+  const confirmItemModal = () => {
+    if (!itemModal) return;
+    const { _editIdx, ...data } = itemModal;
+    const item = { ...data, price: data.rate };
+    if (_editIdx !== undefined) {
+      setOrderItems(prev => prev.map((it, i) => i === _editIdx ? item : it));
+    } else {
+      setOrderItems(prev => [...prev, item]);
+    }
+    setItemModal(null);
   };
 
   const updateItem = (idx, field, val) => {
@@ -188,7 +213,7 @@ function CreateOrderModal({ visible, onClose, onCreated }) {
 
   const removeItem = (idx) => setOrderItems(prev => prev.filter((_, i) => i !== idx));
 
-  const total = orderItems.reduce((s, i) => s + (parseFloat(i.price) || 0) * (parseFloat(i.quantity) || 1), 0);
+  const total = orderItems.reduce((s, i) => s + (parseFloat(i.total) || 0), 0);
 
   const handleCreate = async () => {
     if (!customer.trim()) { setError('Customer name is required.'); return; }
@@ -289,10 +314,11 @@ function CreateOrderModal({ visible, onClose, onCreated }) {
               <View style={m.itemsTable}>
                 <View style={m.itemsHeader}>
                   <Text style={[m.iht, { flex: 3 }]}>Item</Text>
-                  <Text style={[m.iht, { flex: 1.2, textAlign: 'center' }]}>Qty</Text>
-                  <Text style={[m.iht, { flex: 1.5, textAlign: 'center' }]}>Price</Text>
-                  <Text style={[m.iht, { flex: 1.5, textAlign: 'right' }]}>Subtotal</Text>
-                  <View style={{ width: 28 }} />
+                  <Text style={[m.iht, { flex: 1, textAlign: 'center' }]}>Qty</Text>
+                  <Text style={[m.iht, { flex: 1, textAlign: 'center' }]}>Rate</Text>
+                  <Text style={[m.iht, { flex: 1, textAlign: 'center' }]}>Disc%</Text>
+                  <Text style={[m.iht, { flex: 1.2, textAlign: 'right' }]}>Total</Text>
+                  <View style={{ width: 56 }} />
                 </View>
                 {orderItems.map((it, idx) => (
                   <View key={idx} style={m.itemRow}>
@@ -300,23 +326,13 @@ function CreateOrderModal({ visible, onClose, onCreated }) {
                       <Text style={m.itemName}>{it.item_name}</Text>
                       {it.unit ? <Text style={m.itemUnit}>{it.unit}</Text> : null}
                     </View>
-                    <TextInput
-                      style={[m.cellInput, { flex: 1.2, textAlign: 'center' }]}
-                      value={String(it.quantity)}
-                      onChangeText={v => updateItem(idx, 'quantity', v)}
-                      keyboardType="numeric"
-                    />
-                    <TextInput
-                      style={[m.cellInput, { flex: 1.5, textAlign: 'center' }]}
-                      value={String(it.price)}
-                      onChangeText={v => updateItem(idx, 'price', v)}
-                      keyboardType="numeric"
-                      placeholder="₹0"
-                      placeholderTextColor="#CBD5E1"
-                    />
-                    <Text style={[m.subtotal, { flex: 1.5 }]}>
-                      ₹{((parseFloat(it.price) || 0) * (parseFloat(it.quantity) || 1)).toFixed(2)}
-                    </Text>
+                    <Text style={[m.cellText, { flex: 1, textAlign: 'center' }]}>{it.quantity || '-'}</Text>
+                    <Text style={[m.cellText, { flex: 1, textAlign: 'center' }]}>{it.rate || '-'}</Text>
+                    <Text style={[m.cellText, { flex: 1, textAlign: 'center' }]}>{it.discount || '0'}%</Text>
+                    <Text style={[m.subtotal, { flex: 1.2 }]}>₹{parseFloat(it.total || 0).toFixed(2)}</Text>
+                    <TouchableOpacity onPress={() => setItemModal({ ...it, _editIdx: idx })} style={{ width: 28, alignItems: 'center' }}>
+                      <Ionicons name="pencil" size={15} color="#F87171" />
+                    </TouchableOpacity>
                     <TouchableOpacity onPress={() => removeItem(idx)} style={{ width: 28, alignItems: 'center' }}>
                       <Ionicons name="close-circle" size={18} color="#F87171" />
                     </TouchableOpacity>
@@ -352,6 +368,56 @@ function CreateOrderModal({ visible, onClose, onCreated }) {
           </View>
         </View>
       </View>
+
+      {/* Item Detail Modal */}
+      <Modal visible={!!itemModal} transparent animationType="fade" onRequestClose={() => setItemModal(null)}>
+        <View style={im.backdrop}>
+          <View style={im.sheet}>
+            <View style={im.header}>
+              <Text style={im.title}>{itemModal?.item_name || 'Item Details'}</Text>
+              <TouchableOpacity onPress={() => setItemModal(null)}><Ionicons name="close" size={22} color="#64748B" /></TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 420 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <View style={im.grid}>
+                {[
+                  { key: 'feet', label: 'Feet' }, { key: 'inch', label: 'Inch' },
+                  { key: 'length', label: 'Length' }, { key: 'width', label: 'Width' },
+                  { key: 'totalRnft', label: 'Total RNFT' }, { key: 'sqm', label: 'SQM' },
+                  { key: 'rnmt', label: 'RNMT' }, { key: 'rnft', label: 'RNFT' },
+                  { key: 'bundle', label: 'Bundle' }, { key: 'quantity', label: 'Qty' },
+                  { key: 'rate', label: 'Rate' }, { key: 'discount', label: 'Discount %' },
+                ].map(f => (
+                  <View key={f.key} style={im.field}>
+                    <Text style={im.fieldLabel}>{f.label}</Text>
+                    <TextInput
+                      style={im.fieldInput}
+                      value={String(itemModal?.[f.key] || '')}
+                      onChangeText={v => updateItemModal(f.key, v)}
+                      keyboardType="numeric"
+                      placeholder="0"
+                      placeholderTextColor="#CBD5E1"
+                    />
+                  </View>
+                ))}
+                <View style={im.field}>
+                  <Text style={im.fieldLabel}>Total</Text>
+                  <View style={[im.fieldInput, { backgroundColor: '#EEF2FF' }]}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>₹{itemModal?.total || '0.00'}</Text>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+            <View style={im.footer}>
+              <TouchableOpacity style={im.cancelBtn} onPress={() => setItemModal(null)}>
+                <Text style={im.cancelTxt}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={im.addBtn} onPress={confirmItemModal}>
+                <Text style={im.addTxt}>{itemModal?._editIdx !== undefined ? 'Update Item' : 'Add Item'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Notes bottom sheet */}
       <Modal visible={showNotes} transparent animationType="slide" onRequestClose={() => setShowNotes(false)}>
@@ -462,7 +528,7 @@ const s = StyleSheet.create({
   container:   { flex: 1, width: '100%', alignSelf: 'stretch', backgroundColor: '#F8FAFC' },
   topBar:      { padding: 12, paddingBottom: 0 },
   searchBox:   { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  searchInput: { flex: 1, fontSize: 14, color: '#0F172A' },
+  searchInput: { flex: 1, fontSize: 14, color: '#0F172A', outlineStyle: 'none' },
   empty:       { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
   emptyTxt:    { fontSize: 14, color: '#94A3B8', fontWeight: '500' },
   card:        { backgroundColor: '#fff', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0' },
@@ -487,7 +553,7 @@ const m = StyleSheet.create({
   row:         { flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingTop: 20 },
   label:       { fontSize: 11, fontWeight: '700', color: '#94A3B8', marginBottom: 6, paddingHorizontal: 20 },
   inputBox:    { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: '#F8FAFC', gap: 8, marginHorizontal: 20 },
-  input:       { flex: 1, fontSize: 14, color: '#0F172A' },
+  input:       { flex: 1, fontSize: 14, color: '#0F172A', outlineStyle: 'none' },
   sugg:        { marginHorizontal: 20, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, overflow: 'hidden', marginTop: 2 },
   suggItem:    { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   suggTxt:     { fontSize: 13, color: '#0F172A', flex: 1 },
@@ -499,6 +565,7 @@ const m = StyleSheet.create({
   itemName:    { fontSize: 13, fontWeight: '600', color: '#0F172A' },
   itemUnit:    { fontSize: 10, color: '#94A3B8' },
   cellInput:   { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 6, paddingVertical: 5, paddingHorizontal: 4, fontSize: 13, color: '#0F172A', backgroundColor: '#fff' },
+  cellText:    { fontSize: 13, color: '#0F172A' },
   subtotal:    { fontSize: 13, fontWeight: '700', color: '#0F172A', textAlign: 'right' },
   notesBtn:    { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-end', marginRight: 20, marginBottom: 0, paddingHorizontal: 14, paddingVertical: 10 },
   notesBtnTxt: { fontSize: 12, fontWeight: '600', color: '#64748B' },
@@ -523,6 +590,22 @@ const n = StyleSheet.create({
   input:    { backgroundColor: '#F8FAFC', borderRadius: 10, padding: 14, fontSize: 14, color: '#0F172A', minHeight: 120, borderWidth: 1, borderColor: '#E2E8F0' },
   doneBtn:  { backgroundColor: Colors.brandRed, borderRadius: 12, paddingVertical: 15, alignItems: 'center', marginTop: 16 },
   doneTxt:  { fontSize: 15, fontWeight: '700', color: '#fff' },
+});
+
+const im = StyleSheet.create({
+  backdrop:    { flex: 1, backgroundColor: 'rgba(15,23,42,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  sheet:       { backgroundColor: '#fff', borderRadius: 16, width: '100%', maxWidth: 520, padding: 20 },
+  header:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+  title:       { fontSize: 16, fontWeight: '800', color: '#0F172A' },
+  grid:        { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  field:       { width: '47%' },
+  fieldLabel:  { fontSize: 11, fontWeight: '700', color: '#94A3B8', marginBottom: 4, textTransform: 'uppercase' },
+  fieldInput:  { borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: '#0F172A', backgroundColor: '#F8FAFC', outlineStyle: 'none' },
+  footer:      { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingTop: 16 },
+  cancelBtn:   { paddingHorizontal: 18, paddingVertical: 11, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' },
+  cancelTxt:   { fontSize: 14, fontWeight: '600', color: '#64748B' },
+  addBtn:      { paddingHorizontal: 20, paddingVertical: 11, borderRadius: 10, backgroundColor: Colors.brandRed },
+  addTxt:      { fontSize: 14, fontWeight: '700', color: '#fff' },
 });
 
 const d = StyleSheet.create({
