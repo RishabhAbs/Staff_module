@@ -1,4 +1,5 @@
-﻿export const API_BASE_URL = 'http://localhost:5280/api';
+﻿// Same-origin in production (backend serves this web build); override via env for local/native dev.
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || '/api';
 
 export const ENDPOINTS = {
   // Auth

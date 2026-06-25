@@ -708,7 +708,8 @@ function parseFiles(filePath) {
 }
 
 function buildFileUrl(path) {
-  const base = 'http://localhost:5280';
+  // Same-origin: backend serves /uploads from this host. Override for local/native dev.
+  const base = process.env.EXPO_PUBLIC_API_ORIGIN || '';
   return path.startsWith('http') ? path : `${base}${path}`;
 }
 
