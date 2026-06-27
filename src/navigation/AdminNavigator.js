@@ -21,6 +21,10 @@ import OrdersScreen           from '@screens/admin/OrdersScreen';
 import TaskManagementScreen   from '@screens/admin/TaskManagementScreen';
 import RemindersScreen        from '@screens/reminders/RemindersScreen';
 import DocumentsScreen        from '@screens/admin/DocumentsScreen';
+import VisitsScreen           from '@screens/visits/VisitsScreen';
+import AdminStaffCustomersScreen from '@screens/visits/AdminStaffCustomersScreen';
+import LeadScreen             from '@screens/leads/LeadScreen';
+import AssetsScreen           from '@screens/admin/AssetsScreen';
 import MoreScreen             from '@screens/admin/MoreScreen';
 
 const Stack = createNativeStackNavigator();
@@ -76,6 +80,10 @@ export default function AdminNavigator() {
         <Stack.Screen name="Items"       component={ItemMasterScreen} />
         <Stack.Screen name="Orders"      component={OrdersScreen} />
         <Stack.Screen name="Documents"   component={DocumentsScreen} />
+        <Stack.Screen name="New"         component={VisitsScreen} />
+        <Stack.Screen name="StaffCustomers" component={AdminStaffCustomersScreen} />
+        <Stack.Screen name="Leads"       component={LeadScreen} />
+        <Stack.Screen name="Assets"      component={AssetsScreen} />
         <Stack.Screen name="Leave"       component={LeaveScreen} />
         <Stack.Screen name="Attendance"  component={AdminAttendanceScreen} />
         <Stack.Screen name="Departments" component={DepartmentMasterScreen} />
@@ -99,6 +107,10 @@ export default function AdminNavigator() {
       <Stack.Screen name="Items"       component={ItemMasterScreen} />
       <Stack.Screen name="Orders"      component={OrdersScreen} />
       <Stack.Screen name="Documents"   component={DocumentsScreen} />
+      <Stack.Screen name="New"         component={VisitsScreen} />
+      <Stack.Screen name="StaffCustomers" component={AdminStaffCustomersScreen} />
+      <Stack.Screen name="Leads"       component={LeadScreen} />
+      <Stack.Screen name="Assets"      component={AssetsScreen} />
     </Stack.Navigator>
   );
 }

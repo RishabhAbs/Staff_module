@@ -318,6 +318,242 @@ async function migrate() {
         FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
       )
     `);
+    // Assignment + task linkage for "notify 1 day before & create task" feature
+    await addColumnIfMissing(conn, 'reminders', 'assigned_to',  'INT NULL');
+    await addColumnIfMissing(conn, 'reminders', 'task_created', 'TINYINT(1) DEFAULT 0');
+    await addColumnIfMissing(conn, 'reminders', 'task_id',      'INT NULL');
+
+    // ── reminder masters (category + quick-select presets) ─────────────────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS reminder_categories (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        label      VARCHAR(100) NOT NULL UNIQUE,
+        icon       VARCHAR(50)  NOT NULL DEFAULT 'pricetag-outline',
+        color      VARCHAR(20)  NOT NULL DEFAULT '#475569',
+        sort_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS reminder_presets (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        category_id INT NOT NULL,
+        title       VARCHAR(255) NOT NULL,
+        note        VARCHAR(255),
+        repeat_type ENUM('none','daily','weekly','monthly','yearly') DEFAULT 'none',
+        sort_order  INT DEFAULT 0,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES reminder_categories(id) ON DELETE CASCADE
+      )
+    `);
+
+    // Seed default categories + presets (one-time, only if table is empty)
+    const [catCount] = await conn.query('SELECT COUNT(*) AS cnt FROM reminder_categories');
+    if (catCount[0].cnt === 0) {
+      const seed = [
+        { label: 'Tax & GST', icon: 'receipt-outline', color: '#7C3AED', presets: [
+          ['GST Return Filing (GSTR-1)', 'Monthly GSTR-1 due on 11th', 'monthly'],
+          ['GST Return Filing (GSTR-3B)', 'Monthly GSTR-3B due on 20th', 'monthly'],
+          ['GST Annual Return (GSTR-9)', 'Annual GST return filing due 31 Dec', 'yearly'],
+          ['TDS Payment', 'TDS deposit due by 7th of month', 'monthly'],
+          ['Advance Tax Payment', 'Quarterly advance tax installment', 'monthly'],
+          ['Income Tax Return Filing', 'Annual ITR filing deadline', 'yearly'],
+        ]},
+        { label: 'Duties & Compliance', icon: 'shield-checkmark-outline', color: '#C2410C', presets: [
+          ['Import/Export Duty Payment', 'Customs duty clearance', 'monthly'],
+          ['PF / EPF Contribution', 'Employee provident fund due 15th', 'monthly'],
+          ['ESI Contribution', 'Employee state insurance due 15th', 'monthly'],
+          ['Professional Tax Payment', 'State professional tax due date', 'monthly'],
+          ['ROC Annual Filing', 'Annual return filing with ROC', 'yearly'],
+          ['Shop Act License Renewal', 'Annual shop & establishment renewal', 'yearly'],
+        ]},
+        { label: 'Utility Bills', icon: 'flash-outline', color: '#D97706', presets: [
+          ['Electricity Bill Payment', 'Monthly electricity bill due', 'monthly'],
+          ['Water Bill Payment', 'Monthly/quarterly water charges', 'monthly'],
+          ['Internet / Broadband Bill', 'Monthly broadband bill due', 'monthly'],
+          ['Telephone / Mobile Bill', 'Monthly phone bill due', 'monthly'],
+          ['Generator / Fuel Refill', 'Refill diesel/petrol for generator', 'monthly'],
+        ]},
+        { label: 'Rent & Lease', icon: 'business-outline', color: '#0369A1', presets: [
+          ['Office Rent Payment', 'Monthly office/shop rent due', 'monthly'],
+          ['Warehouse Rent Payment', 'Monthly warehouse rent due', 'monthly'],
+          ['Equipment Lease Payment', 'Monthly equipment lease installment', 'monthly'],
+          ['Vehicle Lease Payment', 'Monthly vehicle lease EMI', 'monthly'],
+        ]},
+        { label: 'Insurance', icon: 'umbrella-outline', color: '#15803D', presets: [
+          ['Business Insurance Renewal', 'Annual business/fire insurance', 'yearly'],
+          ['Vehicle Insurance Renewal', 'Annual vehicle insurance renewal', 'yearly'],
+          ['Health Insurance Premium', 'Annual health insurance premium', 'yearly'],
+          ['Stock / Inventory Insurance', 'Annual stock insurance renewal', 'yearly'],
+        ]},
+        { label: 'Banking & Finance', icon: 'card-outline', color: '#1D4ED8', presets: [
+          ['Bank Loan EMI', 'Monthly loan EMI payment', 'monthly'],
+          ['Credit Card Bill Payment', 'Monthly credit card due date', 'monthly'],
+          ['CC Limit Renewal', 'Annual cash credit limit renewal', 'yearly'],
+          ['Fixed Deposit Maturity', 'FD maturity / renewal date', 'none'],
+        ]},
+        { label: 'Licences & Renewals', icon: 'document-text-outline', color: '#BE185D', presets: [
+          ['Trade License Renewal', 'Annual trade/business license', 'yearly'],
+          ['FSSAI License Renewal', 'Annual food safety license', 'yearly'],
+          ['Drug License Renewal', 'Annual drug/pharma license', 'yearly'],
+          ['Fire NOC Renewal', 'Annual fire safety certificate', 'yearly'],
+          ['Domain / Hosting Renewal', 'Annual website domain renewal', 'yearly'],
+          ['Software License Renewal', 'Annual software subscription', 'yearly'],
+        ]},
+      ];
+      let order = 0;
+      for (const cat of seed) {
+        const [r] = await conn.query(
+          'INSERT INTO reminder_categories (label, icon, color, sort_order) VALUES (?, ?, ?, ?)',
+          [cat.label, cat.icon, cat.color, order++]
+        );
+        let p = 0;
+        for (const [title, note, repeat] of cat.presets) {
+          await conn.query(
+            'INSERT INTO reminder_presets (category_id, title, note, repeat_type, sort_order) VALUES (?, ?, ?, ?, ?)',
+            [r.insertId, title, note, repeat, p++]
+          );
+        }
+      }
+      console.log('  + Seeded reminder categories & presets.');
+    }
+
+    // ── field-visit customers (master, for auto-fill on repeat visits) ──────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS visit_customers (
+        id           INT AUTO_INCREMENT PRIMARY KEY,
+        customer_name VARCHAR(200) NOT NULL,
+        gst_number   VARCHAR(30),
+        phone        VARCHAR(30),
+        dealer_name  VARCHAR(200),
+        category     VARCHAR(100),
+        address        VARCHAR(255),
+        district       VARCHAR(100),
+        state          VARCHAR(100),
+        pin_no         VARCHAR(15),
+        contact_person VARCHAR(150),
+        alternative_no VARCHAR(30),
+        email          VARCHAR(150),
+        pan_no         VARCHAR(20),
+        latitude     DECIMAL(10,8),
+        longitude    DECIMAL(11,8),
+        created_by   INT,
+        created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uniq_customer_name (customer_name)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    // ── field-visit logs (each punch) ───────────────────────────────────────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS visit_logs (
+        id            INT AUTO_INCREMENT PRIMARY KEY,
+        customer_id   INT,
+        customer_name VARCHAR(200) NOT NULL,
+        gst_number    VARCHAR(30),
+        phone         VARCHAR(30),
+        dealer_name   VARCHAR(200),
+        category      VARCHAR(100),
+        address        VARCHAR(255),
+        district       VARCHAR(100),
+        state          VARCHAR(100),
+        pin_no         VARCHAR(15),
+        contact_person VARCHAR(150),
+        alternative_no VARCHAR(30),
+        email          VARCHAR(150),
+        pan_no         VARCHAR(20),
+        visit_status   VARCHAR(50),
+        comment        TEXT,
+        latitude      DECIMAL(10,8),
+        longitude     DECIMAL(11,8),
+        shop_photo    VARCHAR(255),
+        salesperson_id   INT NOT NULL,
+        salesperson_name VARCHAR(200),
+        visited_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_salesperson (salesperson_id),
+        INDEX idx_visited_at (visited_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+
+    // ── extend visit tables with extended dealer/contact fields (idempotent) ────
+    for (const t of ['visit_customers', 'visit_logs']) {
+      await addColumnIfMissing(conn, t, 'address',        'VARCHAR(255)');
+      await addColumnIfMissing(conn, t, 'district',       'VARCHAR(100)');
+      await addColumnIfMissing(conn, t, 'state',          'VARCHAR(100)');
+      await addColumnIfMissing(conn, t, 'pin_no',         'VARCHAR(15)');
+      await addColumnIfMissing(conn, t, 'contact_person', 'VARCHAR(150)');
+      await addColumnIfMissing(conn, t, 'alternative_no', 'VARCHAR(30)');
+      await addColumnIfMissing(conn, t, 'email',          'VARCHAR(150)');
+      await addColumnIfMissing(conn, t, 'pan_no',         'VARCHAR(20)');
+    }
+    await addColumnIfMissing(conn, 'visit_logs', 'visit_status', 'VARCHAR(50)');
+    await addColumnIfMissing(conn, 'visit_logs', 'comment',      'TEXT');
+
+    // ── leads ───────────────────────────────────────────────────────────────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS leads (
+        id              INT AUTO_INCREMENT PRIMARY KEY,
+        company         VARCHAR(200),
+        contact_person  VARCHAR(150),
+        mobile          VARCHAR(30),
+        email           VARCHAR(150),
+        lead_type       VARCHAR(50),
+        remark          TEXT,
+        status          VARCHAR(30) DEFAULT 'Open',
+        handled_by      INT NULL,
+        last_contact_at DATETIME NULL,
+        next_followup_at DATETIME NULL,
+        created_by      INT NULL,
+        created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    await addColumnIfMissing(conn, 'leads', 'email',            'VARCHAR(150)');
+    await addColumnIfMissing(conn, 'leads', 'last_contact_at',  'DATETIME NULL');
+    await addColumnIfMissing(conn, 'leads', 'next_followup_at', 'DATETIME NULL');
+
+    // lead activity log (for view history / actions trail)
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS lead_logs (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        lead_id    INT NOT NULL,
+        staff_id   INT NULL,
+        action     VARCHAR(50) NOT NULL,
+        note       TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // lead items — requirements / corrections / updates entered against a lead
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS lead_items (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        lead_id     INT NOT NULL,
+        kind        VARCHAR(20) NOT NULL DEFAULT 'requirement',
+        description TEXT,
+        deadline    DATE NULL,
+        amount      DECIMAL(12,2) NULL,
+        created_by  INT NULL,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // ── assets ─────────────────────────────────────────────────────────────────
+    await conn.query(`
+      CREATE TABLE IF NOT EXISTS assets (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        asset_type  VARCHAR(50) NOT NULL,
+        asset_name  VARCHAR(200) NOT NULL,
+        identifier  VARCHAR(100),
+        assigned_to INT,
+        issued_date DATE,
+        return_date DATE,
+        status      VARCHAR(20) DEFAULT 'issued',
+        remarks     TEXT,
+        created_by  INT,
+        created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
 
     // ── seed default admin ─────────────────────────────────────────────────────
     const hashed = await bcrypt.hash('admin123', 10);

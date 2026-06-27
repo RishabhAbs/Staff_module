@@ -83,7 +83,6 @@ export default function LedgerMasterScreen({ navigation }) {
         <View style={s.header}>
           <View>
             <Text style={s.title}>Ledger Master</Text>
-            <Text style={s.subtitle}>Create and manage ledger accounts for financial tracking.</Text>
           </View>
           <TouchableOpacity style={s.addBtn} onPress={openAdd}>
             <Ionicons name="add-circle" size={18} color="#fff" />

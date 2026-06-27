@@ -218,11 +218,6 @@ export default function LeaveScreen({ navigation }) {
           <Text style={styles.pageTitle}>
             {user?.role === 'admin' ? 'Leave Approvals' : 'Leave Requests'}
           </Text>
-          <Text style={styles.pageSubtitle}>
-            {user?.role === 'admin'
-              ? 'Manage and review staff leave applications'
-              : 'Apply for leaves and track your requests'}
-          </Text>
         </View>
       )}
       {user?.role !== 'admin' && !isMobile && (

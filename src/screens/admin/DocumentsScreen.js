@@ -33,7 +33,7 @@ function catMeta(label) {
 }
 
 // ── Document Form Modal ───────────────────────────────────────────────────────
-function DocFormModal({ visible, onClose, onSave, editing, staffList }) {
+function DocFormModal({ visible, onClose, onSave, editing, staffList, presetCategory }) {
   const [name, setName]             = useState('');
   const [category, setCategory]     = useState('');
   const [catText, setCatText]       = useState('');
@@ -46,6 +46,7 @@ function DocFormModal({ visible, onClose, onSave, editing, staffList }) {
   const [renewal, setRenewal]       = useState('');
   const [notes, setNotes]           = useState('');
   const [files, setFiles]           = useState([]);
+  const [existingFiles, setExistingFiles] = useState([]); // already-uploaded files kept on edit
   const [cameraOpen, setCameraOpen] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [saving, setSaving]         = useState(false);
@@ -65,10 +66,12 @@ function DocFormModal({ visible, onClose, onSave, editing, staffList }) {
         setRenewal(editing.renewal_date ? dayjs(editing.renewal_date).format('YYYY-MM-DD') : '');
         setNotes(editing.notes || '');
         setFiles([]);
+        setExistingFiles(parseFiles(editing.file_path));
       } else {
-        setName(''); setCategory(''); setCatText('');
+        setName('');
+        setCategory(presetCategory || ''); setCatText(presetCategory || '');
         setDocType('company'); setStaffId(''); setStaffSearch('');
-        setGst(''); setRenewal(''); setNotes(''); setFiles([]);
+        setGst(''); setRenewal(''); setNotes(''); setFiles([]); setExistingFiles([]);
       }
       setCatOpen(false); setStaffOpen(false); setError('');
     }
@@ -90,6 +93,8 @@ function DocFormModal({ visible, onClose, onSave, editing, staffList }) {
       if (renewal) form.append('renewal_date', renewal);
       if (notes.trim()) form.append('notes', notes.trim());
       files.forEach(f => form.append('files', f));
+      // Existing files to keep (edit mode); backend merges these with newly uploaded ones
+      if (editing) form.append('keep_files', JSON.stringify(existingFiles));
       if (editing) {
         await api.putForm(`/documents/${editing.id}`, form);
       } else {
@@ -245,8 +250,28 @@ function DocFormModal({ visible, onClose, onSave, editing, staffList }) {
               <View style={{ width: 10 }} />
               <View style={{ flex: 1 }}>
                 <Text style={fm.label}>Renewal Date</Text>
-                <TextInput style={fm.input} placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#94A3B8" value={renewal} onChangeText={setRenewal} />
+                {Platform.OS === 'web' ? (
+                  <input
+                    type="date"
+                    value={renewal}
+                    onChange={(e) => setRenewal(e.target.value)}
+                    style={{
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '10px',
+                      padding: '9px 12px',
+                      fontSize: '13px',
+                      color: '#0F172A',
+                      backgroundColor: '#FAFAFA',
+                      fontFamily: 'inherit',
+                      width: '100%',
+                      boxSizing: 'border-box',
+                      outline: 'none',
+                    }}
+                  />
+                ) : (
+                  <TextInput style={fm.input} placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#94A3B8" value={renewal} onChangeText={setRenewal} />
+                )}
               </View>
             </View>
 
@@ -288,12 +313,28 @@ function DocFormModal({ visible, onClose, onSave, editing, staffList }) {
                   onCapture={file => setFiles(prev => [...prev, file])}
                   onClose={() => setCameraOpen(false)}
                 />
-                {/* Existing server files */}
-                {editing?.file_name && files.length === 0 && (
-                  <View style={fm.fileChip}>
-                    <Ionicons name="document-outline" size={13} color="#64748B" />
-                    <Text style={fm.fileChipTxt} numberOfLines={1}>{editing.file_name}</Text>
-                    <Text style={fm.fileChipSub}>(existing)</Text>
+                {/* Existing server files — kept unless removed */}
+                {existingFiles.length > 0 && (
+                  <View style={{ marginTop: 8, gap: 6 }}>
+                    {existingFiles.map((f, i) => {
+                      const isImage = isImagePath(f.path);
+                      return (
+                        <View key={`ex-${i}`} style={fm.fileChip}>
+                          <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}
+                            onPress={() => { if (isImage) setPreviewUrl(buildFileUrl(f.path)); }}
+                            activeOpacity={isImage ? 0.7 : 1}
+                          >
+                            <Ionicons name={isImage ? 'image-outline' : 'document-outline'} size={13} color={isImage ? Colors.primary : '#64748B'} />
+                            <Text style={[fm.fileChipTxt, isImage && { color: Colors.primary, textDecorationLine: 'underline' }]} numberOfLines={1}>{f.name || `File ${i + 1}`}</Text>
+                            <Text style={fm.fileChipSub}>(existing)</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity onPress={() => setExistingFiles(prev => prev.filter((_, j) => j !== i))}>
+                            <Ionicons name="close-circle" size={15} color="#94A3B8" />
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
                   </View>
                 )}
                 {/* Newly selected files */}
@@ -413,6 +454,27 @@ export default function DocumentsScreen({ navigation }) {
   const [search, setSearch]       = useState('');
   const [viewFile, setViewFile]   = useState(null); // { url, isImage }
   const [filterOpen, setFilterOpen] = useState(false);
+  const [openFolder, setOpenFolder] = useState(null); // null = folder grid; else category name
+  const [presetCat, setPresetCat]   = useState(null); // pre-filled category when adding into a folder
+
+  // Keyboard navigation for the file preview viewer (← → to step, Esc to close)
+  React.useEffect(() => {
+    if (!viewFile || viewFile.mode !== 'preview' || Platform.OS !== 'web') return;
+    const handler = (e) => {
+      if (e.key === 'Escape') { setViewFile(null); return; }
+      const list = viewFile.files || [];
+      if (list.length < 2) return;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        const cur = viewFile.index ?? 0;
+        const n = ((e.key === 'ArrowRight' ? cur + 1 : cur - 1) + list.length) % list.length;
+        const f = list[n];
+        setViewFile({ mode: 'preview', url: buildFileUrl(f.path), isImage: isImagePath(f.path), files: list, index: n });
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [viewFile]);
 
   const load = useCallback(async () => {
     try {
@@ -441,7 +503,7 @@ export default function DocumentsScreen({ navigation }) {
     return true;
   });
 
-  // Group by category
+  // Group by category (category == folder)
   const groups = {};
   filtered.forEach(d => {
     const key = d.category || 'Other';
@@ -449,11 +511,12 @@ export default function DocumentsScreen({ navigation }) {
     groups[key].push(d);
   });
 
-  const expiringSoon = docs.filter(d => {
-    if (!d.renewal_date) return false;
-    const diff = dayjs(d.renewal_date).diff(dayjs(), 'day');
-    return diff >= 0 && diff <= 30;
-  });
+  // Folder view state: when searching, show a flat result list (ignore folders).
+  const isSearching = !!search.trim();
+  const folderNames = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  // If the open folder no longer has matches, fall back to the grid.
+  const activeFolder = openFolder && groups[openFolder] ? openFolder : null;
+  const docsInFolder = activeFolder ? groups[activeFolder] : [];
 
   return (
     <View style={s.screen}>
@@ -464,17 +527,6 @@ export default function DocumentsScreen({ navigation }) {
         contentContainerStyle={[s.content, isMobile && { paddingHorizontal: 10 }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[Colors.primary]} />}
       >
-        {/* Expiry alerts */}
-        {expiringSoon.length > 0 && (
-          <View style={s.alertBox}>
-            <Ionicons name="warning-outline" size={16} color="#B45309" />
-            <Text style={s.alertTxt}>
-              <Text style={{ fontWeight: '700' }}>{expiringSoon.length} document{expiringSoon.length > 1 ? 's' : ''}</Text>
-              {' '}expiring within 30 days: {expiringSoon.map(d => d.name).join(', ')}
-            </Text>
-          </View>
-        )}
-
         {/* Search + Filter + Add row */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10, position: 'relative', zIndex: 50 }}>
           <View style={[s.searchRow, { flex: 1, marginBottom: 0 }]}>
@@ -505,32 +557,50 @@ export default function DocumentsScreen({ navigation }) {
           </TouchableOpacity>
 
           {/* Add Document button */}
-          {!isMobile && (
-            <TouchableOpacity style={s.newBtn} onPress={() => { setEditing(null); setFormVisible(true); }}>
-              <Ionicons name="add" size={18} color="#fff" />
-              <Text style={s.newBtnTxt}>Add Document</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity style={s.newBtn} onPress={() => { setEditing(null); setPresetCat(openFolder && groups[openFolder] ? openFolder : null); setFormVisible(true); }}>
+            <Ionicons name="add" size={18} color="#fff" />
+            {!isMobile && <Text style={s.newBtnTxt}>Add Document</Text>}
+          </TouchableOpacity>
+
         </View>
 
         {/* Filter dropdown panel */}
         {filterOpen && (
           <View style={s.filterPanel}>
-            <Text style={s.filterPanelLabel}>Type</Text>
-            <View style={s.filterRow}>
-              {[['all','All'], ['company','Company'], ['employee','Employee']].map(([val, lbl]) => (
+            <View style={s.filterHead}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="options-outline" size={15} color="#475569" />
+                <Text style={s.filterHeadTitle}>Filters</Text>
+              </View>
+              {(filterType !== 'all' || filterCat !== 'All') && (
                 <TouchableOpacity
-                  key={val}
-                  style={[s.filterChip, filterType === val && s.filterChipActive]}
-                  onPress={() => setFilterType(val)}
+                  style={s.filterReset}
+                  onPress={() => { setFilterType('all'); setFilterCat('All'); }}
                 >
-                  <Text style={[s.filterChipTxt, filterType === val && s.filterChipTxtActive]}>{lbl}</Text>
+                  <Ionicons name="refresh-outline" size={13} color="#64748B" />
+                  <Text style={s.filterResetTxt}>Reset</Text>
                 </TouchableOpacity>
-              ))}
+              )}
             </View>
+
+            <View style={s.filterSection}>
+              <Text style={s.filterPanelLabel}>Type</Text>
+              <View style={s.filterRow}>
+                {[['all','All'], ['company','Company'], ['employee','Employee']].map(([val, lbl]) => (
+                  <TouchableOpacity
+                    key={val}
+                    style={[s.filterChip, filterType === val && s.filterChipActive]}
+                    onPress={() => setFilterType(val)}
+                  >
+                    <Text style={[s.filterChipTxt, filterType === val && s.filterChipTxtActive]}>{lbl}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             {allCats.length > 2 && (
-              <>
-                <Text style={[s.filterPanelLabel, { marginTop: 10 }]}>Category</Text>
+              <View style={[s.filterSection, { borderTopWidth: 1, borderTopColor: '#F1F5F9', paddingTop: 12, marginTop: 2 }]}>
+                <Text style={s.filterPanelLabel}>Category</Text>
                 <View style={[s.filterRow, { flexWrap: 'wrap' }]}>
                   {allCats.map(cat => {
                     const meta = catMeta(cat);
@@ -546,70 +616,112 @@ export default function DocumentsScreen({ navigation }) {
                     );
                   })}
                 </View>
-              </>
+              </View>
             )}
-            <TouchableOpacity
-              style={{ alignSelf: 'flex-end', marginTop: 10, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F1F5F9' }}
-              onPress={() => { setFilterType('all'); setFilterCat('All'); }}
-            >
-              <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600' }}>Reset</Text>
-            </TouchableOpacity>
           </View>
         )}
 
-        {loading ? (
-          <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />
-        ) : filtered.length === 0 ? (
-          <View style={s.empty}>
-            <Ionicons name="folder-open-outline" size={48} color="#CBD5E1" />
-            <Text style={s.emptyTxt}>No documents found</Text>
-            <Text style={s.emptySub}>Upload company licences, GST certificates, employee docs & more</Text>
-            <TouchableOpacity style={s.emptyBtn} onPress={() => { setEditing(null); setFormVisible(true); }}>
-              <Ionicons name="add" size={15} color="#fff" />
-              <Text style={s.emptyBtnTxt}>Add Document</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          Object.entries(groups).map(([cat, items]) => {
-            const meta = catMeta(cat);
-            return (
-              <View key={cat} style={s.group}>
-                <View style={s.groupHeader}>
-                  <View style={[s.groupIcon, { backgroundColor: meta.color + '18' }]}>
-                    <Ionicons name={meta.icon} size={13} color={meta.color} />
-                  </View>
-                  <Text style={[s.groupTitle, { color: meta.color }]}>{cat}</Text>
-                  <Text style={s.groupCount}>{items.length}</Text>
+        {(() => {
+          // Renders a list of documents (mobile cards or desktop table)
+          const renderDocList = (items, meta) => (
+            isMobile ? (
+              items.map(doc => (
+                <SwipeableDocCard
+                  key={doc.id}
+                  doc={doc}
+                  onEdit={() => { setEditing(doc); setFormVisible(true); }}
+                  onDelete={() => handleDelete(doc.id)}
+                >
+                  <DocCardMobile doc={doc} meta={catMeta(doc.category)} onView={setViewFile} />
+                </SwipeableDocCard>
+              ))
+            ) : (
+              <View style={s.tableWrap}>
+                <View style={s.tableHead}>
+                  <Text style={[s.th, { flex: 2 }]}>Document Name</Text>
+                  <Text style={[s.th, { flex: 1.2 }]}>Employee</Text>
+                  <Text style={[s.th, { flex: 1 }]}>GST Number</Text>
+                  <Text style={[s.th, { flex: 1 }]}>Renewal Date</Text>
+                  <Text style={[s.th, { width: 80, textAlign: 'center' }]}>File</Text>
+                  <Text style={[s.th, { width: 80, textAlign: 'right' }]}>Actions</Text>
                 </View>
+                {items.map(doc => <DocRow key={doc.id} doc={doc} meta={catMeta(doc.category)} onEdit={() => { setEditing(doc); setFormVisible(true); }} onDelete={() => handleDelete(doc.id)} onView={setViewFile} />)}
+              </View>
+            )
+          );
 
-                {isMobile ? (
-                  items.map(doc => (
-                    <SwipeableDocCard
-                      key={doc.id}
-                      doc={doc}
-                      onEdit={() => { setEditing(doc); setFormVisible(true); }}
-                      onDelete={() => handleDelete(doc.id)}
-                    >
-                      <DocCardMobile doc={doc} meta={meta} onView={setViewFile} />
-                    </SwipeableDocCard>
-                  ))
-                ) : (
-                  <View style={s.tableWrap}>
-                    <View style={s.tableHead}>
-                      <Text style={[s.th, { flex: 2 }]}>Document Name</Text>
-                      <Text style={[s.th, { flex: 1.2 }]}>Employee</Text>
-                      <Text style={[s.th, { flex: 1 }]}>GST Number</Text>
-                      <Text style={[s.th, { flex: 1 }]}>Renewal Date</Text>
-                      <Text style={[s.th, { width: 80 }]}>File</Text>
-                      <Text style={[s.th, { width: 70, textAlign: 'right' }]}>Actions</Text>
-                    </View>
-                    {items.map(doc => <DocRow key={doc.id} doc={doc} meta={meta} onEdit={() => { setEditing(doc); setFormVisible(true); }} onDelete={() => handleDelete(doc.id)} onView={setViewFile} />)}
-                  </View>
-                )}
+          if (loading) return <ActivityIndicator color={Colors.primary} style={{ marginTop: 40 }} />;
+
+          if (filtered.length === 0) return (
+            <View style={s.empty}>
+              <Ionicons name="folder-open-outline" size={48} color="#CBD5E1" />
+              <Text style={s.emptyTxt}>No documents found</Text>
+              <Text style={s.emptySub}>Upload company licences, GST certificates, employee docs & more</Text>
+              <TouchableOpacity style={s.emptyBtn} onPress={() => { setEditing(null); setFormVisible(true); }}>
+                <Ionicons name="add" size={15} color="#fff" />
+                <Text style={s.emptyBtnTxt}>Add Document</Text>
+              </TouchableOpacity>
+            </View>
+          );
+
+          // While searching, show flat results across all folders
+          if (isSearching) {
+            return (
+              <View style={s.group}>
+                <Text style={[s.groupCount, { marginBottom: 8 }]}>{filtered.length} result{filtered.length > 1 ? 's' : ''}</Text>
+                {renderDocList(filtered)}
               </View>
             );
-          })
-        )}
+          }
+
+          // Inside an opened folder
+          if (activeFolder) {
+            const meta = catMeta(activeFolder);
+            return (
+              <View style={s.group}>
+                {/* Compact folder header: breadcrumb + name + add */}
+                <View style={s.folderBar}>
+                  <TouchableOpacity style={s.crumbBtn} onPress={() => setOpenFolder(null)}>
+                    <Ionicons name="chevron-back" size={15} color="#64748B" />
+                    <Text style={s.crumbTxt}>All Folders</Text>
+                  </TouchableOpacity>
+                  <Text style={s.folderBarSep}>/</Text>
+                  <Ionicons name={meta.icon} size={15} color={meta.color} />
+                  <Text style={s.folderBarTitle} numberOfLines={1}>{activeFolder}</Text>
+                  <Text style={s.folderBarCount}>({docsInFolder.length})</Text>
+                </View>
+
+                {renderDocList(docsInFolder, meta)}
+              </View>
+            );
+          }
+
+          // Folder grid (top level)
+          return (
+            <View>
+              <View style={s.folderGrid}>
+              {folderNames.map(cat => {
+                const meta = catMeta(cat);
+                const count = groups[cat].length;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[s.folderTile, isMobile && { width: '47%' }]}
+                    onPress={() => setOpenFolder(cat)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[s.folderTileIcon, { backgroundColor: meta.color + '18' }]}>
+                      <Ionicons name="folder" size={26} color={meta.color} />
+                    </View>
+                    <Text style={s.folderTileLabel} numberOfLines={1}>{cat}</Text>
+                    <Text style={s.folderTileCount}>{count} {count === 1 ? 'document' : 'documents'}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+              </View>
+            </View>
+          );
+        })()}
       </ScrollView>
 
       {isMobile && (
@@ -622,10 +734,11 @@ export default function DocumentsScreen({ navigation }) {
 
       <DocFormModal
         visible={formVisible}
-        onClose={() => { setFormVisible(false); setEditing(null); }}
+        onClose={() => { setFormVisible(false); setEditing(null); setPresetCat(null); }}
         onSave={load}
         editing={editing}
         staffList={staff}
+        presetCategory={presetCat}
       />
 
       {/* File viewer popup — gallery or full preview */}
@@ -661,7 +774,7 @@ export default function DocumentsScreen({ navigation }) {
                   return (
                     <TouchableOpacity
                       key={i}
-                      onPress={() => setViewFile({ mode: 'preview', url, isImage: isImg, files: viewFile.files })}
+                      onPress={() => setViewFile({ mode: 'preview', url, isImage: isImg, files: viewFile.files, index: i })}
                       style={{ width: 110, height: 90, borderRadius: 10, overflow: 'hidden', backgroundColor: '#2a2a2a', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#333' }}
                     >
                       {isImg ? (
@@ -680,14 +793,41 @@ export default function DocumentsScreen({ navigation }) {
               </View>
             )}
 
-            {/* Preview mode — full image or iframe */}
-            {viewFile.mode === 'preview' && (
-              viewFile.isImage ? (
-                <Image source={{ uri: viewFile.url }} style={{ width: '100%', height: 500 }} resizeMode="contain" />
-              ) : (
-                <iframe src={viewFile.url} style={{ width: '100%', height: '75vh', border: 'none', display: 'block', backgroundColor: '#fff' }} title="file preview" />
-              )
-            )}
+            {/* Preview mode — full image or iframe, with prev/next */}
+            {viewFile.mode === 'preview' && (() => {
+              const list = viewFile.files || [];
+              const hasMany = list.length > 1;
+              const goTo = (idx) => {
+                const n = (idx + list.length) % list.length;
+                const f = list[n];
+                setViewFile({ mode: 'preview', url: buildFileUrl(f.path), isImage: isImagePath(f.path), files: list, index: n });
+              };
+              const cur = viewFile.index ?? 0;
+              return (
+                <View style={{ position: 'relative', width: '100%', backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+                  {viewFile.isImage ? (
+                    <img src={viewFile.url} style={{ width: '100%', height: 500, objectFit: 'contain', display: 'block' }} alt="preview" />
+                  ) : (
+                    <iframe src={viewFile.url} style={{ width: '100%', height: '75vh', border: 'none', display: 'block', backgroundColor: '#fff' }} title="file preview" />
+                  )}
+                  {hasMany && (
+                    <>
+                      <TouchableOpacity onPress={() => goTo(cur - 1)}
+                        style={{ position: 'absolute', left: 10, top: '50%', marginTop: -22, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Ionicons name="chevron-back" size={24} color="#fff" />
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => goTo(cur + 1)}
+                        style={{ position: 'absolute', right: 10, top: '50%', marginTop: -22, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' }}>
+                        <Ionicons name="chevron-forward" size={24} color="#fff" />
+                      </TouchableOpacity>
+                      <View style={{ position: 'absolute', bottom: 12, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, left: 0, right: 0, marginHorizontal: 'auto', width: 64, alignItems: 'center' }}>
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '600' }}>{cur + 1} / {list.length}</Text>
+                      </View>
+                    </>
+                  )}
+                </View>
+              );
+            })()}
           </Pressable>
         </Pressable>
       )}
@@ -732,7 +872,7 @@ function FileLinks({ filePath, onView }) {
   };
   return (
     <TouchableOpacity style={s.viewBtn} onPress={handlePress}>
-      <Ionicons name="eye-outline" size={14} color={Colors.primary} />
+      <Ionicons name="images-outline" size={15} color={Colors.primary} />
     </TouchableOpacity>
   );
 }
@@ -755,23 +895,23 @@ function DocRow({ doc, meta, onEdit, onDelete, onView }) {
       <Text style={[s.td, { flex: 1.2, color: '#64748B' }]} numberOfLines={1}>{doc.staff_name || '—'}</Text>
       <Text style={[s.td, { flex: 1, color: '#64748B', fontSize: 12 }]} numberOfLines={1}>{doc.gst_number || '—'}</Text>
       <View style={[s.td, { flex: 1 }]}>
-        {renewal ? (
-          <View style={[s.renewBadge, isExpired && s.renewExpired, isExpiring && s.renewSoon]}>
-            <Ionicons name="calendar-outline" size={10} color={isExpired ? '#DC2626' : isExpiring ? '#B45309' : '#15803D'} />
-            <Text style={[s.renewTxt, isExpired && { color: '#DC2626' }, isExpiring && { color: '#B45309' }]}>
-              {renewal.format('DD MMM YYYY')}
-            </Text>
-          </View>
-        ) : <Text style={{ color: '#94A3B8', fontSize: 12 }}>—</Text>}
+        <Text style={{ color: '#334155', fontSize: 12 }} numberOfLines={1}>
+          {renewal ? renewal.format('DD MMM YYYY') : '—'}
+        </Text>
+        {isExpired ? (
+          <Text style={s.expTag}>Expired</Text>
+        ) : isExpiring ? (
+          <Text style={s.expTagSoon}>Expiring soon</Text>
+        ) : null}
       </View>
-      <View style={[s.td, { width: 80 }]}>
+      <View style={[s.td, { width: 80, alignItems: 'center' }]}>
         {doc.file_path ? <FileLinks filePath={doc.file_path} onView={onView} /> : <Text style={{ color: '#94A3B8', fontSize: 12 }}>—</Text>}
       </View>
-      <View style={[s.td, { width: 70, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }]}>
-        <TouchableOpacity style={s.editBtn} onPress={onEdit}>
+      <View style={[s.td, { width: 80, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }]}>
+        <TouchableOpacity style={s.editBtn} onPress={(e) => { e.stopPropagation?.(); onEdit(); }}>
           <Ionicons name="pencil-outline" size={13} color="#1D4ED8" />
         </TouchableOpacity>
-        <TouchableOpacity style={s.delBtn} onPress={onDelete}>
+        <TouchableOpacity style={s.delBtn} onPress={(e) => { e.stopPropagation?.(); onDelete(); }}>
           <Ionicons name="trash-outline" size={13} color="#DC2626" />
         </TouchableOpacity>
       </View>
@@ -887,7 +1027,9 @@ function DocCardMobile({ doc, meta, onView }) {
         </View>
         <View style={{ flex: 1 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-            <Text style={[s.docName, { flex: 1 }]} numberOfLines={1}>{doc.name}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={s.docName} numberOfLines={1}>{doc.name}</Text>
+            </View>
             {!!doc.file_path && (
               <FileLinks filePath={doc.file_path} onView={onView} />
             )}
@@ -895,12 +1037,10 @@ function DocCardMobile({ doc, meta, onView }) {
           {doc.staff_name ? <Text style={s.docNote}>{doc.staff_name}</Text> : null}
           {doc.gst_number ? <Text style={s.docNote}>GST: {doc.gst_number}</Text> : null}
           {renewal ? (
-            <View style={[s.renewBadge, isExpired && s.renewExpired, isExpiring && s.renewSoon, { alignSelf: 'flex-start', marginTop: 4 }]}>
-              <Ionicons name="calendar-outline" size={10} color={isExpired ? '#DC2626' : isExpiring ? '#B45309' : '#15803D'} />
-              <Text style={[s.renewTxt, isExpired && { color: '#DC2626' }, isExpiring && { color: '#B45309' }]}>
-                {renewal.format('DD MMM YYYY')}
-              </Text>
-            </View>
+            <Text style={[s.docNote, { marginTop: 4 }]}>
+              Renewal: {renewal.format('DD MMM YYYY')}
+              {isExpired ? '  • Expired' : isExpiring ? '  • Expiring soon' : ''}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -928,12 +1068,17 @@ const s = StyleSheet.create({
   toolBtn:   { width: 40, height: 40, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', backgroundColor: '#fff', justifyContent: 'center', alignItems: 'center' },
   filterDot: { position: 'absolute', top: 7, right: 7, width: 7, height: 7, borderRadius: 4, backgroundColor: Colors.primary },
 
-  filterPanel: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0', padding: 14, marginBottom: 12 },
-  filterPanelLabel: { fontSize: 11, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 },
+  filterPanel: { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB', paddingHorizontal: 16, paddingVertical: 14, marginBottom: 12 },
+  filterHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  filterHeadTitle: { fontSize: 14, fontWeight: '800', color: '#1E293B' },
+  filterReset: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#F1F5F9' },
+  filterResetTxt: { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  filterSection: { marginBottom: 8 },
+  filterPanelLabel: { fontSize: 10, fontWeight: '700', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 },
   filterRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-  filterChip:{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#fff' },
+  filterChip:{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 9, borderWidth: 1, borderColor: '#E5E7EB', backgroundColor: '#F8FAFC' },
   filterChipActive: { borderColor: Colors.primary, backgroundColor: Colors.primary + '12' },
-  filterChipTxt:    { fontSize: 12, color: '#64748B', fontWeight: '600' },
+  filterChipTxt:    { fontSize: 12.5, color: '#475569', fontWeight: '600' },
   filterChipTxtActive: { color: Colors.primary, fontWeight: '700' },
 
   group:        { marginBottom: 20 },
@@ -941,6 +1086,21 @@ const s = StyleSheet.create({
   groupIcon:    { width: 24, height: 24, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
   groupTitle:   { fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.6, flex: 1 },
   groupCount:   { fontSize: 12, color: '#94A3B8', fontWeight: '600' },
+
+  // Folder grid + opened-folder header
+  folderGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 14, marginTop: 4 },
+  folderTile:     { width: 170, backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E5E7EB', padding: 16, alignItems: 'flex-start', gap: 10, shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  folderTileIcon: { width: 48, height: 48, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  folderTileLabel:{ fontSize: 14, fontWeight: '700', color: '#1E293B', width: '100%' },
+  folderTileCount:{ fontSize: 11, color: '#94A3B8', fontWeight: '600' },
+  folderBar:        { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 12 },
+  crumbBtn:         { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  crumbTxt:         { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  folderBarSep:     { fontSize: 13, color: '#CBD5E1' },
+  folderBarTitle:   { fontSize: 14, fontWeight: '800', color: '#1E293B', maxWidth: 220 },
+  folderBarCount:   { fontSize: 12, color: '#94A3B8', fontWeight: '600' },
+  addToFolderBtn:   { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: 13, borderRadius: 9 },
+  addToFolderTxt:   { fontSize: 13, fontWeight: '700', color: '#fff' },
 
   tableWrap:    { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#E5E7EB', overflow: 'hidden' },
   tableHead:    { flexDirection: 'row', backgroundColor: '#F8FAFC', paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
@@ -955,13 +1115,16 @@ const s = StyleSheet.create({
   docName:   { fontSize: 13, fontWeight: '700', color: '#0F172A', marginBottom: 1 },
   docNote:   { fontSize: 11, color: '#64748B' },
 
-  renewBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, backgroundColor: '#F0FDF4' },
-  renewExpired: { backgroundColor: '#FEF2F2' },
-  renewSoon:    { backgroundColor: '#FFFBEB' },
-  renewTxt:     { fontSize: 10, fontWeight: '700', color: '#15803D' },
+  renewBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, backgroundColor: '#F1F5F9' },
+  renewExpired: { backgroundColor: '#F1F5F9' },
+  renewSoon:    { backgroundColor: '#F1F5F9' },
+  renewTxt:     { fontSize: 10, fontWeight: '700', color: '#334155' },
+  expTag:       { fontSize: 10, fontWeight: '700', color: '#DC2626', marginTop: 2 },
+  expTagSoon:   { fontSize: 10, fontWeight: '700', color: '#B45309', marginTop: 2 },
 
   viewBtn:   { flexDirection: 'row', alignItems: 'center', gap: 2, width: 26, height: 26, borderRadius: 7, backgroundColor: '#FFF0F0', justifyContent: 'center' },
   viewBtnTxt:{ fontSize: 10, color: Colors.primary, fontWeight: '700' },
+  infoBtn:   { width: 26, height: 26, borderRadius: 7, backgroundColor: '#ECFEFF', justifyContent: 'center', alignItems: 'center' },
   editBtn:   { width: 26, height: 26, borderRadius: 7, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center' },
   delBtn:    { width: 26, height: 26, borderRadius: 7, backgroundColor: '#FEF2F2', justifyContent: 'center', alignItems: 'center' },
   swipeWrap: {

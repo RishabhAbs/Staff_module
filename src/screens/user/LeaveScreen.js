@@ -223,7 +223,6 @@ export default function UserLeaveScreen({ navigation }) {
         <View style={s.titleRow}>
           <View>
             <Text style={s.pageTitle}>Leave</Text>
-            <Text style={s.pageSub}>{dayjs().format('YYYY')} · {user?.name || user?.username}</Text>
           </View>
           <TouchableOpacity style={s.applyBtn} onPress={() => setApplyVisible(true)}>
             <Ionicons name="add" size={18} color="#fff" />

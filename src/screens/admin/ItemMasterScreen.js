@@ -84,7 +84,6 @@ export default function ItemMasterScreen({ navigation }) {
         <View style={s.header}>
           <View>
             <Text style={s.title}>Item Master</Text>
-            <Text style={s.subtitle}>Create and manage inventory items and products.</Text>
           </View>
           <TouchableOpacity style={s.addBtn} onPress={openAdd}>
             <Ionicons name="add-circle" size={18} color="#fff" />

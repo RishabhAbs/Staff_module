@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { Colors } from '@constants/colors';
+import dayjs from 'dayjs';
 import api from '@services/api';
 import CameraModal from '@components/common/CameraModal';
 
@@ -315,6 +316,7 @@ const TABS = [
   { key: 'employment', label: 'Employment',  icon: 'briefcase-outline' },
   { key: 'bank',       label: 'Bank',        icon: 'card-outline' },
   { key: 'salary',     label: 'Salary',      icon: 'wallet-outline' },
+  { key: 'assets',     label: 'Assets',      icon: 'hardware-chip-outline' },
 ];
 
 // ── Tab content ───────────────────────────────────────────────────────────────
@@ -969,6 +971,99 @@ function SalaryTab({ data, updateSalaryGroup, updateSalaryItem, addSalaryGroup, 
   );
 }
 
+const ASSET_STATUS_COLORS = {
+  issued:   { bg: '#DBEAFE', text: '#1D4ED8' },
+  returned: { bg: '#D1FAE5', text: '#059669' },
+  lost:     { bg: '#FEE2E2', text: '#DC2626' },
+  damaged:  { bg: '#FEF3C7', text: '#D97706' },
+};
+
+function AssetsTab({ userId }) {
+  const [assets, setAssets] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!userId) { setLoading(false); return; }
+    api.get('/assets').then(all => {
+      const mine = (Array.isArray(all) ? all : []).filter(a => a.assigned_to === userId);
+      setAssets(mine);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [userId]);
+
+  if (!userId) {
+    return (
+      <>
+        <SectionTitle title="Assigned Assets" />
+        <View style={{ alignItems: 'center', paddingVertical: 30, gap: 8 }}>
+          <Ionicons name="information-circle-outline" size={32} color="#CBD5E1" />
+          <Text style={{ fontSize: 13, color: '#94A3B8', textAlign: 'center' }}>
+            Save the employee first, then assign assets from the Assets screen.
+          </Text>
+        </View>
+      </>
+    );
+  }
+
+  if (loading) {
+    return (
+      <>
+        <SectionTitle title="Assigned Assets" />
+        <View style={{ alignItems: 'center', paddingVertical: 30 }}>
+          <Text style={{ fontSize: 13, color: '#94A3B8' }}>Loading assets…</Text>
+        </View>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <SectionTitle title="Assigned Assets" />
+      {assets.length === 0 ? (
+        <View style={{ alignItems: 'center', paddingVertical: 30, gap: 8 }}>
+          <Ionicons name="hardware-chip-outline" size={36} color="#CBD5E1" />
+          <Text style={{ fontSize: 14, fontWeight: '700', color: '#1E293B' }}>No assets assigned</Text>
+          <Text style={{ fontSize: 12, color: '#94A3B8', textAlign: 'center' }}>
+            Assets can be assigned from the Assets tab in the sidebar.
+          </Text>
+        </View>
+      ) : (
+        assets.map(a => {
+          const sc = ASSET_STATUS_COLORS[a.status] || ASSET_STATUS_COLORS.issued;
+          return (
+            <View key={a.id} style={{ backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E5E7EB', padding: 12, marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 8, backgroundColor: Colors.brandRed + '12', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons
+                    name={a.asset_type?.includes('Laptop') ? 'laptop-outline' : a.asset_type?.includes('SIM') ? 'call-outline' : a.asset_type?.includes('Mobile') ? 'phone-portrait-outline' : 'hardware-chip-outline'}
+                    size={18} color={Colors.brandRed}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#1E293B' }}>{a.asset_name}</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>{a.asset_type}</Text>
+                </View>
+                <View style={{ backgroundColor: sc.bg, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: sc.text, textTransform: 'capitalize' }}>{a.status}</Text>
+                </View>
+              </View>
+              <View style={{ gap: 3, paddingLeft: 46 }}>
+                {a.identifier ? <Text style={{ fontSize: 11, color: '#475569' }}><Text style={{ fontWeight: '700', color: '#64748B' }}>ID: </Text>{a.identifier}</Text> : null}
+                {a.issued_date ? <Text style={{ fontSize: 11, color: '#475569' }}><Text style={{ fontWeight: '700', color: '#64748B' }}>Issued: </Text>{dayjs(a.issued_date).format('DD MMM YYYY')}</Text> : null}
+                {a.return_date ? <Text style={{ fontSize: 11, color: '#475569' }}><Text style={{ fontWeight: '700', color: '#64748B' }}>Return: </Text>{dayjs(a.return_date).format('DD MMM YYYY')}</Text> : null}
+                {a.remarks ? <Text style={{ fontSize: 11, color: '#475569' }}><Text style={{ fontWeight: '700', color: '#64748B' }}>Remarks: </Text>{a.remarks}</Text> : null}
+              </View>
+            </View>
+          );
+        })
+      )}
+      <View style={{ backgroundColor: '#FFF7ED', borderRadius: 8, padding: 10, marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <Ionicons name="information-circle-outline" size={16} color="#D97706" />
+        <Text style={{ fontSize: 11, color: '#92400E', flex: 1 }}>To add or modify assets, go to the Assets section from the sidebar.</Text>
+      </View>
+    </>
+  );
+}
+
 // ── Main Modal ────────────────────────────────────────────────────────────────
 
 export default function UserFormModal({ visible, isAdding, initialData, onSave, onClose }) {
@@ -1152,16 +1247,17 @@ export default function UserFormModal({ visible, isAdding, initialData, onSave, 
       case 'employment': return <EmploymentTab data={data} set={set} updateArray={updateArray} addArrayItem={addArrayItem} removeArrayItem={removeArrayItem} />;
       case 'bank':       return <BankTab       data={data} set={set} updateArray={updateArray} addArrayItem={addArrayItem} removeArrayItem={removeArrayItem} />;
       case 'salary':     return (
-        <SalaryTab 
-          data={data} 
-          updateSalaryGroup={updateSalaryGroup} 
-          updateSalaryItem={updateSalaryItem} 
-          addSalaryGroup={addSalaryGroup} 
-          removeSalaryGroup={removeSalaryGroup} 
-          addSalaryItem={addSalaryItem} 
-          removeSalaryItem={removeSalaryItem} 
+        <SalaryTab
+          data={data}
+          updateSalaryGroup={updateSalaryGroup}
+          updateSalaryItem={updateSalaryItem}
+          addSalaryGroup={addSalaryGroup}
+          removeSalaryGroup={removeSalaryGroup}
+          addSalaryItem={addSalaryItem}
+          removeSalaryItem={removeSalaryItem}
         />
       );
+      case 'assets':     return <AssetsTab userId={data.id} />;
       default:           return null;
     }
   };

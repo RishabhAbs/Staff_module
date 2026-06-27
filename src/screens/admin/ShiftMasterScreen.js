@@ -222,7 +222,6 @@ export default function ShiftMasterScreen({ navigation }) {
           {!isMobile && (
             <View style={{ flex: 1 }}>
               <Text style={s.title}>Shift Master Settings</Text>
-              <Text style={s.subtitle}>Configure daily work shifts, start times, and estimated end times for attendance checks.</Text>
             </View>
           )}
           <TouchableOpacity style={s.addBtn} onPress={openAddModal}>

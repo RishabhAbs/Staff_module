@@ -12,6 +12,9 @@ import MyTasksScreen        from '@screens/user/MyTasksScreen';
 import ProfileScreen        from '@screens/profile/ProfileScreen';
 import UserDetailScreen     from '@screens/admin/UserDetailScreen';
 import RemindersScreen      from '@screens/reminders/RemindersScreen';
+import VisitsScreen         from '@screens/visits/VisitsScreen';
+import LeadScreen           from '@screens/leads/LeadScreen';
+import AssetsScreen         from '@screens/admin/AssetsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab   = createBottomTabNavigator();
@@ -60,6 +63,9 @@ export default function UserNavigator() {
     return (
       <Stack.Navigator screenOptions={{ headerShown: false }}>
         <Stack.Screen name="UserTabs"   component={UserTabs} />
+        <Stack.Screen name="New"        component={VisitsScreen} />
+        <Stack.Screen name="Leads"      component={LeadScreen} />
+        <Stack.Screen name="Assets"     component={AssetsScreen} />
         <Stack.Screen name="UserDetail" component={UserDetailScreen} />
       </Stack.Navigator>
     );
@@ -71,6 +77,9 @@ export default function UserNavigator() {
       <Stack.Screen name="Leave"      component={LeaveScreen} />
       <Stack.Screen name="Tasks"      component={MyTasksScreen} />
       <Stack.Screen name="Reminders"  component={RemindersScreen} />
+      <Stack.Screen name="New"        component={VisitsScreen} />
+      <Stack.Screen name="Leads"      component={LeadScreen} />
+      <Stack.Screen name="Assets"     component={AssetsScreen} />
       <Stack.Screen name="Profile"    component={ProfileScreen} />
       <Stack.Screen name="UserDetail" component={UserDetailScreen} />
     </Stack.Navigator>

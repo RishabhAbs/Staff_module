@@ -22,7 +22,11 @@ app.use('/api/orders',         require('./routes/orders'));
 app.use('/api/notifications',  require('./routes/notifications'));
 app.use('/api/tasks',          require('./routes/tasks'));
 app.use('/api/reminders',      require('./routes/reminders'));
+app.use('/api/reminder-masters', require('./routes/reminderMasters'));
 app.use('/api/documents',      require('./routes/documents'));
+app.use('/api/visits',         require('./routes/visits'));
+app.use('/api/leads',          require('./routes/leads'));
+app.use('/api/assets',         require('./routes/assets'));
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -86,7 +90,7 @@ console.log('[PATHS] index.html   :', fs.existsSync(indexHtmlPath) ? 'EXISTS ✓
 // Serve static frontend directories
 app.use('/_expo',  express.static(path.join(frontendPath, '_expo')));
 app.use('/assets', express.static(path.join(frontendPath, 'assets')));
-app.use('/uploads', express.static(path.join(__dirname, '../../uploads')));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // favicon — return 204 if file missing (avoids 500 crash)
 app.get('/favicon.ico', (req, res) => {
@@ -117,10 +121,13 @@ app.get('*', (req, res) => {
 
 const PORT = process.env.PORT || 3001;
 
+const { startScheduler } = require('./scheduler');
+
 // Run migrations then start server
 migrate()
   .then(() => {
     app.listen(PORT, '0.0.0.0', () => console.log(`ABS Staff backend running on port ${PORT}`));
+    startScheduler();
   })
   .catch((err) => {
     console.error('Failed to start server due to migration error:', err.message);

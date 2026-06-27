@@ -72,12 +72,20 @@ router.post('/', auth, upload.array('files', 20), async (req, res) => {
 // PUT /api/documents/:id
 router.put('/:id', auth, upload.array('files', 20), async (req, res) => {
   try {
-    const { name, category, doc_type, staff_id, gst_number, renewal_date, notes } = req.body;
+    const { name, category, doc_type, staff_id, gst_number, renewal_date, notes, keep_files } = req.body;
     const fields = { name, category, doc_type, gst_number: gst_number || null, renewal_date: renewal_date || null, notes: notes || null, staff_id: staff_id || null };
-    if (req.files?.length) {
-      const uploadedFiles = req.files;
-      fields.file_path = JSON.stringify(uploadedFiles.map(f => ({ path: `/uploads/documents/${f.filename}`, name: f.originalname, size: f.size })));
-      fields.file_name = uploadedFiles[0].originalname;
+
+    // Files the client wants to keep (existing ones not removed in the edit form)
+    let kept = [];
+    if (keep_files) {
+      try { kept = JSON.parse(keep_files) || []; } catch { kept = []; }
+    }
+    const uploaded = (req.files || []).map(f => ({ path: `/uploads/documents/${f.filename}`, name: f.originalname, size: f.size }));
+    // Only touch file columns if the client sent file info (keep_files present means edit form managed files)
+    if (keep_files !== undefined || uploaded.length) {
+      const merged = [...kept, ...uploaded];
+      fields.file_path = merged.length ? JSON.stringify(merged) : null;
+      fields.file_name = merged[0]?.name || null;
     }
     const keys = Object.keys(fields).map(k => `\`${k}\` = ?`).join(', ');
     await db.query(`UPDATE documents SET ${keys} WHERE id = ?`, [...Object.values(fields), req.params.id]);

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '@constants/colors';
 import ABSLogo from './ABSLogo';
 import { useAuthStore } from '@store/authStore';
+import { useSidebarStore } from '@store/sidebarStore';
 import api from '@services/api';
 
 const MOBILE_BREAKPOINT = 768;
@@ -17,24 +18,25 @@ function BottomTabBar({ navigation, activeTab, user, onLogout }) {
   const [masterSheetOpen, setMasterSheetOpen] = useState(false);
 
   const USER_GROUP_SCREENS   = ['Users', 'Network', 'Attendance'];
-  const MASTER_GROUP_SCREENS = ['Shift Master', 'Departments', 'Ledger Master', 'Item Master', 'Documents', 'Leave', 'Orders'];
+  const MASTER_GROUP_SCREENS = ['Shift Master', 'Departments', 'Ledger Master', 'Item Master', 'Leave', 'Orders', 'Reminders'];
   const isInUserGroup   = USER_GROUP_SCREENS.includes(activeTab);
   const isInMasterGroup = MASTER_GROUP_SCREENS.includes(activeTab);
 
   const adminTabs = [
     { label: 'Home',      icon: 'home',                   screen: 'Home' },
     { label: 'Users',     icon: 'people-outline',         screen: null,   sheet: 'users' },
+    { label: 'Visits',    icon: 'navigate-outline',       screen: 'New' },
+    { label: 'Leads',     icon: 'megaphone-outline',      screen: 'Leads' },
     { label: 'Tasks',     icon: 'checkmark-done-outline', screen: 'Tasks' },
-    { label: 'Reminders', icon: 'alarm-outline',          screen: 'Reminders' },
     { label: 'Master',    icon: 'grid-outline',            screen: null,   sheet: 'master' },
     { label: 'Profile',   icon: 'person-outline',         screen: 'Profile' },
   ];
   const userTabs = [
     { label: 'Home',       icon: 'home',                     screen: 'Home' },
-    { label: 'Attendance', icon: 'calendar-outline',         screen: 'Attendance' },
+    { label: 'Visits',     icon: 'navigate-outline',         screen: 'New' },
+    { label: 'Leads',      icon: 'megaphone-outline',        screen: 'Leads' },
     { label: 'Leave',      icon: 'document-text-outline',    screen: 'Leave' },
     { label: 'Tasks',      icon: 'checkmark-done-outline',   screen: 'Tasks' },
-    { label: 'Reminders',  icon: 'alarm-outline',            screen: 'Reminders' },
     { label: 'Profile',    icon: 'person-outline',           screen: 'Profile' },
   ];
   const tabs = user?.role === 'admin' ? adminTabs : userTabs;
@@ -46,13 +48,14 @@ function BottomTabBar({ navigation, activeTab, user, onLogout }) {
   ];
 
   const masterGroupItems = [
+    { label: 'Reminders',   icon: 'alarm-outline',         screen: 'Reminders',   color: '#DC2626' },
     { label: 'Leave',       icon: 'document-text-outline', screen: 'Leave',       color: '#7C3AED' },
-    { label: 'Documents',   icon: 'folder-open-outline',   screen: 'Documents',   color: '#0369A1' },
     { label: 'Departments', icon: 'business-outline',      screen: 'Departments', color: '#C2410C' },
     { label: 'Shifts',      icon: 'time-outline',          screen: 'Shifts',      color: '#B45309' },
     { label: 'Ledgers',     icon: 'book-outline',          screen: 'Ledgers',     color: '#1D4ED8' },
     { label: 'Items',       icon: 'cube-outline',          screen: 'Items',       color: '#6D28D9' },
     { label: 'Orders',      icon: 'cart-outline',          screen: 'Orders',      color: '#DC2626' },
+    { label: 'Documents',   icon: 'folder-outline',        screen: 'Documents',   color: '#0891B2' },
   ];
 
   return (
@@ -166,6 +169,8 @@ const bt = StyleSheet.create({
 // ── Main Navbar ───────────────────────────────────────────────────────────────
 export default function Navbar({ navigation, activeTab = 'Home' }) {
   const { user, logout } = useAuthStore();
+  const toggleSidebar = useSidebarStore(s => s.toggle);
+  const sidebarOpen   = useSidebarStore(s => s.open);
   const [userDropdown, setUserDropdown] = useState(false);
   const [dropdownPos, setDropdownPos] = useState({ top: 52, left: 0 });
   const [masterDropdown, setMasterDropdown] = useState(false);
@@ -238,7 +243,14 @@ export default function Navbar({ navigation, activeTab = 'Home' }) {
       <>
         <View style={styles.mobileTopBar}>
           <View style={styles.mobileLeftContainer}>
-            <ABSLogo size="sm" />
+            {!sidebarOpen && (
+              <>
+                <TouchableOpacity onPress={toggleSidebar} style={styles.menuBtn}>
+                  <Ionicons name="menu" size={24} color={Colors.text} />
+                </TouchableOpacity>
+                <ABSLogo size="sm" />
+              </>
+            )}
           </View>
           <Text style={styles.mobilePageTitle}>{activeTab}</Text>
           <View style={styles.mobileRightContainer}>
@@ -269,150 +281,18 @@ export default function Navbar({ navigation, activeTab = 'Home' }) {
   // ── Desktop: top navbar ────────────────────────────────────────────────────
   return (
     <View style={styles.navbar}>
-      <TouchableOpacity onPress={() => navigation?.navigate('Home')} activeOpacity={0.8}>
-        <ABSLogo size="sm" />
-      </TouchableOpacity>
-
-      <View style={styles.navItems}>
-        <TouchableOpacity
-          style={[styles.navItem, activeTab === 'Home' && styles.navItemActive]}
-          onPress={() => navigation?.navigate('Home')}
-        >
-          <Ionicons name="home" size={16} color={activeTab === 'Home' ? Colors.brandRed : Colors.textLight} />
-          <Text style={[styles.navLabel, activeTab === 'Home' && styles.navLabelActive]}>Home</Text>
-        </TouchableOpacity>
-
-        <View ref={usersButtonRef}>
-          <TouchableOpacity
-            style={[styles.navItem, (activeTab === 'Users' || activeTab === 'Network' || activeTab === 'Attendance') && styles.navItemActive]}
-            onPress={() => {
-              usersButtonRef.current?.measure((x, y, width, height, pageX, pageY) => {
-                setDropdownPos({ top: pageY + height + 4, left: pageX });
-              });
-              setUserDropdown(!userDropdown);
-            }}
-          >
-            <Ionicons name="people-outline" size={16} color={(activeTab === 'Users' || activeTab === 'Network' || activeTab === 'Attendance') ? Colors.brandRed : Colors.textLight} />
-            <Text style={[styles.navLabel, (activeTab === 'Users' || activeTab === 'Network' || activeTab === 'Attendance') && styles.navLabelActive]}>Users</Text>
-            <Ionicons name={userDropdown ? 'chevron-up' : 'chevron-down'} size={12} color={(activeTab === 'Users' || activeTab === 'Network' || activeTab === 'Attendance') ? Colors.brandRed : Colors.textLight} />
+      {!sidebarOpen && (
+        <>
+          <TouchableOpacity onPress={toggleSidebar} style={styles.menuBtn}>
+            <Ionicons name="menu" size={24} color={Colors.text} />
           </TouchableOpacity>
-
-          <Modal visible={userDropdown} transparent animationType="none" onRequestClose={() => setUserDropdown(false)}>
-            <Pressable style={styles.modalBackdropClear} onPress={() => setUserDropdown(false)}>
-              <View style={[styles.dropdown, { top: dropdownPos.top, left: dropdownPos.left }]}>
-                {[
-                  { label: 'Users',      icon: 'people-outline',   screen: 'Users',    adminOnly: true },
-                  { label: 'Network',    icon: 'location-outline', screen: 'Tracking', adminOnly: true },
-                  { label: 'Attendance', icon: 'calendar-outline', screen: 'Attendance', adminOnly: false },
-                ].filter(item => !item.adminOnly || user?.role === 'admin').map((item) => (
-                  <TouchableOpacity
-                    key={item.label}
-                    style={[styles.dropdownItem, activeTab === item.label && styles.dropdownItemActive]}
-                    onPress={() => { setUserDropdown(false); navigation?.navigate(item.screen); }}
-                  >
-                    <Ionicons name={item.icon} size={16} color={activeTab === item.label ? Colors.brandRed : Colors.text} />
-                    <Text style={[styles.dropdownLabel, activeTab === item.label && styles.dropdownLabelActive]}>{item.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </Pressable>
-          </Modal>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.navItem, activeTab === 'Leave' && styles.navItemActive]}
-          onPress={() => navigation?.navigate('Leave')}
-        >
-          <Ionicons name="document-text-outline" size={16} color={activeTab === 'Leave' ? Colors.brandRed : Colors.textLight} />
-          <Text style={[styles.navLabel, activeTab === 'Leave' && styles.navLabelActive]}>Leave</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.navItem, activeTab === 'Tasks' && styles.navItemActive]}
-          onPress={() => navigation?.navigate('Tasks')}
-        >
-          <Ionicons name="checkmark-done-outline" size={16} color={activeTab === 'Tasks' ? Colors.brandRed : Colors.textLight} />
-          <Text style={[styles.navLabel, activeTab === 'Tasks' && styles.navLabelActive]}>Tasks</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.navItem, activeTab === 'Reminders' && styles.navItemActive]}
-          onPress={() => navigation?.navigate('Reminders')}
-        >
-          <Ionicons name="alarm-outline" size={16} color={activeTab === 'Reminders' ? Colors.brandRed : Colors.textLight} />
-          <Text style={[styles.navLabel, activeTab === 'Reminders' && styles.navLabelActive]}>Reminders</Text>
-        </TouchableOpacity>
-
-        {user?.role === 'admin' && (
-          <TouchableOpacity
-            style={[styles.navItem, activeTab === 'Orders' && styles.navItemActive]}
-            onPress={() => navigation?.navigate('Orders')}
-          >
-            <Ionicons name="receipt-outline" size={16} color={activeTab === 'Orders' ? Colors.brandRed : Colors.textLight} />
-            <Text style={[styles.navLabel, activeTab === 'Orders' && styles.navLabelActive]}>Orders</Text>
+          <TouchableOpacity onPress={() => navigation?.navigate('Home')} activeOpacity={0.8}>
+            <ABSLogo size="sm" />
           </TouchableOpacity>
-        )}
+        </>
+      )}
 
-        {user?.role === 'admin' && (
-          <View ref={masterButtonRef}>
-            <TouchableOpacity
-              style={[styles.navItem, (activeTab === 'Shift Master' || activeTab === 'Departments' || activeTab === 'Ledger Master' || activeTab === 'Item Master' || activeTab === 'Documents') && styles.navItemActive]}
-              onPress={() => {
-                masterButtonRef.current?.measure((x, y, width, height, pageX, pageY) => {
-                  setMasterDropdownPos({ top: pageY + height + 4, left: pageX });
-                });
-                setMasterDropdown(!masterDropdown);
-              }}
-            >
-              <Ionicons name="settings-outline" size={16} color={(activeTab === 'Shift Master' || activeTab === 'Departments' || activeTab === 'Ledger Master' || activeTab === 'Item Master' || activeTab === 'Documents') ? Colors.brandRed : Colors.textLight} />
-              <Text style={[styles.navLabel, (activeTab === 'Shift Master' || activeTab === 'Departments' || activeTab === 'Ledger Master' || activeTab === 'Item Master' || activeTab === 'Documents') && styles.navLabelActive]}>Master</Text>
-              <Ionicons name={masterDropdown ? 'chevron-up' : 'chevron-down'} size={12} color={(activeTab === 'Shift Master' || activeTab === 'Departments' || activeTab === 'Ledger Master' || activeTab === 'Item Master' || activeTab === 'Documents') ? Colors.brandRed : Colors.textLight} />
-            </TouchableOpacity>
-
-            <Modal visible={masterDropdown} transparent animationType="none" onRequestClose={() => setMasterDropdown(false)}>
-              <Pressable style={styles.modalBackdropClear} onPress={() => setMasterDropdown(false)}>
-                <View style={[styles.dropdown, { top: masterDropdownPos.top, left: masterDropdownPos.left }]}>
-                  <TouchableOpacity
-                    style={[styles.dropdownItem, activeTab === 'Shift Master' && styles.dropdownItemActive]}
-                    onPress={() => { setMasterDropdown(false); navigation?.navigate('Shifts'); }}
-                  >
-                    <Ionicons name="time-outline" size={16} color={activeTab === 'Shift Master' ? Colors.brandRed : Colors.text} />
-                    <Text style={[styles.dropdownLabel, activeTab === 'Shift Master' && styles.dropdownLabelActive]}>Shift Master</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.dropdownItem, activeTab === 'Departments' && styles.dropdownItemActive]}
-                    onPress={() => { setMasterDropdown(false); navigation?.navigate('Departments'); }}
-                  >
-                    <Ionicons name="business-outline" size={16} color={activeTab === 'Departments' ? Colors.brandRed : Colors.text} />
-                    <Text style={[styles.dropdownLabel, activeTab === 'Departments' && styles.dropdownLabelActive]}>Department Master</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.dropdownItem, activeTab === 'Ledger Master' && styles.dropdownItemActive]}
-                    onPress={() => { setMasterDropdown(false); navigation?.navigate('Ledgers'); }}
-                  >
-                    <Ionicons name="book-outline" size={16} color={activeTab === 'Ledger Master' ? Colors.brandRed : Colors.text} />
-                    <Text style={[styles.dropdownLabel, activeTab === 'Ledger Master' && styles.dropdownLabelActive]}>Ledger Master</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.dropdownItem, activeTab === 'Item Master' && styles.dropdownItemActive]}
-                    onPress={() => { setMasterDropdown(false); navigation?.navigate('Items'); }}
-                  >
-                    <Ionicons name="cube-outline" size={16} color={activeTab === 'Item Master' ? Colors.brandRed : Colors.text} />
-                    <Text style={[styles.dropdownLabel, activeTab === 'Item Master' && styles.dropdownLabelActive]}>Item Master</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.dropdownItem, activeTab === 'Documents' && styles.dropdownItemActive, { borderBottomWidth: 0 }]}
-                    onPress={() => { setMasterDropdown(false); navigation?.navigate('Documents'); }}
-                  >
-                    <Ionicons name="folder-outline" size={16} color={activeTab === 'Documents' ? Colors.brandRed : Colors.text} />
-                    <Text style={[styles.dropdownLabel, activeTab === 'Documents' && styles.dropdownLabelActive]}>Documents</Text>
-                  </TouchableOpacity>
-                </View>
-              </Pressable>
-            </Modal>
-          </View>
-        )}
-      </View>
+      <View style={{ flex: 1 }} />
 
       <View style={styles.actions}>
         <View ref={notifButtonRef}>
@@ -488,9 +368,10 @@ export default function Navbar({ navigation, activeTab = 'Home' }) {
 
 const styles = StyleSheet.create({
   navbar:           { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingLeft: 8, paddingRight: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', zIndex: 100 },
+  menuBtn:          { padding: 6, marginRight: 4 },
   mobileTopBar:         { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', paddingLeft: 4, paddingRight: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
   mobilePageTitle:      { flex: 1, fontSize: 16, fontWeight: '700', color: Colors.text, textAlign: 'center' },
-  mobileLeftContainer:  { width: 80, alignItems: 'flex-start', justifyContent: 'center', paddingLeft: 8 },
+  mobileLeftContainer:  { width: 96, flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 2 },
   mobileRightContainer: { width: 80, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 12, paddingRight: 8 },
   mobileIconButton:     { padding: 4, position: 'relative' },
   navItems:         { flexDirection: 'row', flex: 1, marginLeft: 24, gap: 4 },

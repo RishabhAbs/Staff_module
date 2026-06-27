@@ -132,7 +132,6 @@ export default function DepartmentMasterScreen({ navigation }) {
           {!isMobile && (
             <View style={{ flex: 1 }}>
               <Text style={s.title}>Department Master</Text>
-              <Text style={s.subtitle}>Create and manage departments. These will be available when adding or editing employees.</Text>
             </View>
           )}
           <TouchableOpacity style={s.addBtn} onPress={openAdd}>

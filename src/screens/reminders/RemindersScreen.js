@@ -10,99 +10,24 @@ import dayjs from 'dayjs';
 import { Colors } from '@constants/colors';
 import Navbar from '@components/common/Navbar';
 import api from '@services/api';
+import { useAuthStore } from '@store/authStore';
 
-// ── Business reminder presets ─────────────────────────────────────────────────
-const CATEGORIES = [
-  {
-    label: 'Tax & GST',
-    icon: 'receipt-outline',
-    color: '#7C3AED',
-    presets: [
-      { title: 'GST Return Filing (GSTR-1)',    note: 'Monthly GSTR-1 due on 11th',         repeat: 'monthly' },
-      { title: 'GST Return Filing (GSTR-3B)',   note: 'Monthly GSTR-3B due on 20th',        repeat: 'monthly' },
-      { title: 'GST Annual Return (GSTR-9)',    note: 'Annual GST return filing due 31 Dec', repeat: 'yearly'  },
-      { title: 'TDS Payment',                   note: 'TDS deposit due by 7th of month',    repeat: 'monthly' },
-      { title: 'Advance Tax Payment',           note: 'Quarterly advance tax installment',  repeat: 'monthly' },
-      { title: 'Income Tax Return Filing',      note: 'Annual ITR filing deadline',         repeat: 'yearly'  },
-    ],
-  },
-  {
-    label: 'Duties & Compliance',
-    icon: 'shield-checkmark-outline',
-    color: '#C2410C',
-    presets: [
-      { title: 'Import/Export Duty Payment',    note: 'Customs duty clearance',             repeat: 'monthly' },
-      { title: 'PF / EPF Contribution',         note: 'Employee provident fund due 15th',   repeat: 'monthly' },
-      { title: 'ESI Contribution',              note: 'Employee state insurance due 15th',  repeat: 'monthly' },
-      { title: 'Professional Tax Payment',      note: 'State professional tax due date',    repeat: 'monthly' },
-      { title: 'ROC Annual Filing',             note: 'Annual return filing with ROC',      repeat: 'yearly'  },
-      { title: 'Shop Act License Renewal',      note: 'Annual shop & establishment renewal',repeat: 'yearly'  },
-    ],
-  },
-  {
-    label: 'Utility Bills',
-    icon: 'flash-outline',
-    color: '#D97706',
-    presets: [
-      { title: 'Electricity Bill Payment',      note: 'Monthly electricity bill due',       repeat: 'monthly' },
-      { title: 'Water Bill Payment',            note: 'Monthly/quarterly water charges',    repeat: 'monthly' },
-      { title: 'Internet / Broadband Bill',     note: 'Monthly broadband bill due',         repeat: 'monthly' },
-      { title: 'Telephone / Mobile Bill',       note: 'Monthly phone bill due',             repeat: 'monthly' },
-      { title: 'Generator / Fuel Refill',       note: 'Refill diesel/petrol for generator', repeat: 'monthly' },
-    ],
-  },
-  {
-    label: 'Rent & Lease',
-    icon: 'business-outline',
-    color: '#0369A1',
-    presets: [
-      { title: 'Office Rent Payment',           note: 'Monthly office/shop rent due',       repeat: 'monthly' },
-      { title: 'Warehouse Rent Payment',        note: 'Monthly warehouse rent due',         repeat: 'monthly' },
-      { title: 'Equipment Lease Payment',       note: 'Monthly equipment lease installment',repeat: 'monthly' },
-      { title: 'Vehicle Lease Payment',         note: 'Monthly vehicle lease EMI',          repeat: 'monthly' },
-    ],
-  },
-  {
-    label: 'Insurance',
-    icon: 'umbrella-outline',
-    color: '#15803D',
-    presets: [
-      { title: 'Business Insurance Renewal',    note: 'Annual business/fire insurance',     repeat: 'yearly'  },
-      { title: 'Vehicle Insurance Renewal',     note: 'Annual vehicle insurance renewal',   repeat: 'yearly'  },
-      { title: 'Health Insurance Premium',      note: 'Annual health insurance premium',    repeat: 'yearly'  },
-      { title: 'Stock / Inventory Insurance',   note: 'Annual stock insurance renewal',     repeat: 'yearly'  },
-    ],
-  },
-  {
-    label: 'Banking & Finance',
-    icon: 'card-outline',
-    color: '#1D4ED8',
-    presets: [
-      { title: 'Bank Loan EMI',                 note: 'Monthly loan EMI payment',           repeat: 'monthly' },
-      { title: 'Credit Card Bill Payment',      note: 'Monthly credit card due date',       repeat: 'monthly' },
-      { title: 'CC Limit Renewal',              note: 'Annual cash credit limit renewal',   repeat: 'yearly'  },
-      { title: 'Fixed Deposit Maturity',        note: 'FD maturity / renewal date',         repeat: 'none'    },
-    ],
-  },
-  {
-    label: 'Licences & Renewals',
-    icon: 'document-text-outline',
-    color: '#BE185D',
-    presets: [
-      { title: 'Trade License Renewal',         note: 'Annual trade/business license',      repeat: 'yearly'  },
-      { title: 'FSSAI License Renewal',         note: 'Annual food safety license',         repeat: 'yearly'  },
-      { title: 'Drug License Renewal',          note: 'Annual drug/pharma license',         repeat: 'yearly'  },
-      { title: 'Fire NOC Renewal',              note: 'Annual fire safety certificate',     repeat: 'yearly'  },
-      { title: 'Domain / Hosting Renewal',      note: 'Annual website domain renewal',      repeat: 'yearly'  },
-      { title: 'Software License Renewal',      note: 'Annual software subscription',       repeat: 'yearly'  },
-    ],
-  },
-  {
-    label: 'Custom',
-    icon: 'create-outline',
-    color: '#475569',
-    presets: [],
-  },
+// Icon + color choices offered when creating/editing a category master
+const ICON_CHOICES = [
+  'receipt-outline', 'shield-checkmark-outline', 'flash-outline', 'business-outline',
+  'umbrella-outline', 'card-outline', 'document-text-outline', 'pricetag-outline',
+  'cash-outline', 'calendar-outline', 'cube-outline', 'people-outline',
+  'car-outline', 'construct-outline', 'megaphone-outline', 'create-outline',
+];
+const COLOR_CHOICES = [
+  '#7C3AED', '#C2410C', '#D97706', '#0369A1', '#15803D', '#1D4ED8',
+  '#BE185D', '#DC2626', '#0891B2', '#4D7C0F', '#9333EA', '#475569',
+];
+
+// Fallback used only until the masters load from the API.
+// Real categories/presets are managed in the DB (reminder_categories / reminder_presets).
+const FALLBACK_CATEGORIES = [
+  { label: 'Custom', icon: 'create-outline', color: '#475569', presets: [] },
 ];
 
 const REPEAT_OPTIONS = [
@@ -118,8 +43,23 @@ const REPEAT_COLOR = {
   monthly: '#C2410C', yearly: '#15803D',
 };
 
+// Native web date/time input — shows a calendar/clock icon and allows manual typing.
+const WEB_DATE_STYLE = {
+  border: '1px solid #E2E8F0',
+  borderRadius: '10px',
+  padding: '9px 12px',
+  fontSize: '13px',
+  color: '#0F172A',
+  backgroundColor: '#FAFAFA',
+  fontFamily: 'inherit',
+  width: '100%',
+  boxSizing: 'border-box',
+  outline: 'none',
+};
+
 // ── Form Modal ────────────────────────────────────────────────────────────────
-function ReminderFormModal({ visible, onClose, onSave, editing }) {
+function ReminderFormModal({ visible, onClose, onSave, editing, categories, isAdmin, staff }) {
+  const CATS = categories && categories.length ? categories : FALLBACK_CATEGORIES;
   const [selCat, setSelCat]         = useState(null);
   const [catDropOpen, setCatDropOpen] = useState(false);
   const [catText, setCatText]       = useState('');
@@ -128,13 +68,15 @@ function ReminderFormModal({ visible, onClose, onSave, editing }) {
   const [date, setDate]             = useState('');
   const [time, setTime]             = useState('');
   const [repeat, setRepeat]         = useState('none');
+  const [assignedTo, setAssignedTo] = useState(null);
+  const [assignDropOpen, setAssignDropOpen] = useState(false);
   const [saving, setSaving]         = useState(false);
   const [error, setError]           = useState('');
 
   React.useEffect(() => {
     if (visible) {
       if (editing) {
-        const ec = getCatForTitle(editing.title);
+        const ec = getCatForTitle(editing.title, CATS);
         setSelCat(ec);
         setCatText(ec?.label || '');
         setTitle(editing.title || '');
@@ -143,6 +85,7 @@ function ReminderFormModal({ visible, onClose, onSave, editing }) {
         setDate(dt.format('YYYY-MM-DD'));
         setTime(dt.format('HH:mm'));
         setRepeat(editing.repeat_type || 'none');
+        setAssignedTo(editing.assigned_to || null);
       } else {
         setSelCat(null);
         setCatText('');
@@ -150,8 +93,10 @@ function ReminderFormModal({ visible, onClose, onSave, editing }) {
         setDate(dayjs().format('YYYY-MM-DD'));
         setTime('10:00');
         setRepeat('none');
+        setAssignedTo(null);
       }
       setCatDropOpen(false);
+      setAssignDropOpen(false);
       setError('');
     }
   }, [visible, editing]);
@@ -176,7 +121,9 @@ function ReminderFormModal({ visible, onClose, onSave, editing }) {
     setSaving(true); setError('');
     try {
       const remind_at = `${date} ${time}:00`;
-      await onSave({ title: title.trim(), note: note.trim(), remind_at, repeat_type: repeat });
+      const payload = { title: title.trim(), note: note.trim(), remind_at, repeat_type: repeat };
+      if (isAdmin) payload.assigned_to = assignedTo || null;
+      await onSave(payload);
       onClose();
     } catch (e) {
       setError(e?.error || e?.message || 'Failed to save.');
@@ -252,7 +199,7 @@ function ReminderFormModal({ visible, onClose, onSave, editing }) {
               {catDropOpen && (
                 <View style={fm.catDropdown}>
                   <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false} nestedScrollEnabled>
-                    {CATEGORIES.filter(cat =>
+                    {CATS.filter(cat =>
                       !catText || cat.label.toLowerCase().includes(catText.toLowerCase())
                     ).map(cat => (
                       <TouchableOpacity
@@ -308,15 +255,33 @@ function ReminderFormModal({ visible, onClose, onSave, editing }) {
 
             <View style={fm.row}>
               <View style={{ flex: 1 }}>
-                <Text style={fm.label}>Date *</Text>
-                <TextInput style={fm.input} placeholder="YYYY-MM-DD"
-                  placeholderTextColor="#94A3B8" value={date} onChangeText={setDate} />
+                <Text style={fm.label}>Due date *</Text>
+                {Platform.OS === 'web' ? (
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={(e) => setDate(e.target.value)}
+                    style={WEB_DATE_STYLE}
+                  />
+                ) : (
+                  <TextInput style={fm.input} placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#94A3B8" value={date} onChangeText={setDate} />
+                )}
               </View>
               <View style={{ width: 10 }} />
               <View style={{ flex: 1 }}>
                 <Text style={fm.label}>Time *</Text>
-                <TextInput style={fm.input} placeholder="HH:MM"
-                  placeholderTextColor="#94A3B8" value={time} onChangeText={setTime} />
+                {Platform.OS === 'web' ? (
+                  <input
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    style={WEB_DATE_STYLE}
+                  />
+                ) : (
+                  <TextInput style={fm.input} placeholder="HH:MM"
+                    placeholderTextColor="#94A3B8" value={time} onChangeText={setTime} />
+                )}
               </View>
             </View>
 
@@ -333,6 +298,64 @@ function ReminderFormModal({ visible, onClose, onSave, editing }) {
                 </TouchableOpacity>
               ))}
             </View>
+
+            {/* Assign to user (admin only) */}
+            {isAdmin && (
+              <>
+                <Text style={fm.label}>Assign to (optional)</Text>
+                <View style={fm.assignWrap}>
+                  <TouchableOpacity
+                    style={[fm.input, fm.catSelector]}
+                    onPress={() => setAssignDropOpen(v => !v)}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                      <Ionicons name="person-outline" size={14} color={assignedTo ? Colors.primary : '#94A3B8'} />
+                      <Text style={[{ fontSize: 13, color: '#94A3B8' }, assignedTo && { color: '#0F172A', fontWeight: '600' }]}>
+                        {assignedTo
+                          ? (staff.find(u => String(u.id) === String(assignedTo))?.name || 'Selected user')
+                          : 'No one (personal reminder)'}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      {assignedTo && (
+                        <TouchableOpacity onPress={() => setAssignedTo(null)} style={fm.catClearBtn} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                          <Ionicons name="close" size={13} color="#94A3B8" />
+                        </TouchableOpacity>
+                      )}
+                      <Ionicons name={assignDropOpen ? 'chevron-up' : 'chevron-down'} size={14} color="#94A3B8" />
+                    </View>
+                  </TouchableOpacity>
+
+                  {assignDropOpen && (
+                    <View style={fm.catDropdown}>
+                      <ScrollView style={{ maxHeight: 200 }} showsVerticalScrollIndicator nestedScrollEnabled>
+                        {staff.length === 0 && (
+                          <Text style={{ fontSize: 12, color: '#94A3B8', padding: 12 }}>No users found.</Text>
+                        )}
+                        {staff.map(u => (
+                          <TouchableOpacity
+                            key={u.id}
+                            style={[fm.catDropItem, String(assignedTo) === String(u.id) && { backgroundColor: Colors.primary + '10' }]}
+                            onPress={() => { setAssignedTo(u.id); setAssignDropOpen(false); }}
+                          >
+                            <Ionicons name="person-circle-outline" size={18} color="#64748B" />
+                            <Text style={[fm.catDropTxt, { color: '#0F172A' }]}>{u.name}</Text>
+                            {String(assignedTo) === String(u.id) && (
+                              <Ionicons name="checkmark" size={14} color={Colors.primary} style={{ marginLeft: 'auto' }} />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+                {assignedTo && (
+                  <Text style={fm.assignHint}>
+                    A task will be created for this user, and they'll be notified one day before the due date.
+                  </Text>
+                )}
+              </>
+            )}
           </ScrollView>
 
           <View style={fm.footer}>
@@ -372,6 +395,9 @@ const fm = StyleSheet.create({
 
   presetChip:         { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#F8FAFC', maxWidth: 180 },
   presetChipTxt:      { fontSize: 12, color: '#64748B', fontWeight: '500' },
+
+  assignWrap:         { position: 'relative', zIndex: 90 },
+  assignHint:         { fontSize: 11, color: '#15803D', marginTop: 6, lineHeight: 15 },
 
   errBox:     { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF2F2', borderRadius: 8, padding: 10, marginBottom: 10 },
   errTxt:     { fontSize: 12, color: '#DC2626', flex: 1 },
@@ -483,15 +509,271 @@ function SwipeableReminderCard({ reminder, onEdit, onDelete, children }) {
   );
 }
 
+// Auto-pick an icon by matching keywords in the category name; falls back to rotation.
+const ICON_KEYWORDS = [
+  [['tax', 'gst', 'tds', 'invoice', 'bill', 'receipt'], 'receipt-outline'],
+  [['compliance', 'duty', 'duties', 'legal', 'audit', 'pf', 'esi'], 'shield-checkmark-outline'],
+  [['electric', 'power', 'utility', 'energy'], 'flash-outline'],
+  [['rent', 'lease', 'office', 'property', 'building', 'warehouse'], 'business-outline'],
+  [['insurance', 'policy', 'cover'], 'umbrella-outline'],
+  [['bank', 'finance', 'loan', 'emi', 'credit', 'payment', 'salary', 'cash'], 'card-outline'],
+  [['licence', 'license', 'renewal', 'certificate', 'permit', 'doc'], 'document-text-outline'],
+  [['vehicle', 'car', 'transport', 'fuel'], 'car-outline'],
+  [['maintenance', 'repair', 'service', 'equipment'], 'construct-outline'],
+  [['marketing', 'ad', 'promo', 'campaign'], 'megaphone-outline'],
+  [['staff', 'employee', 'hr', 'team', 'people'], 'people-outline'],
+  [['stock', 'inventory', 'item', 'product', 'goods'], 'cube-outline'],
+];
+function autoPickIcon(label, existingCount) {
+  const l = (label || '').toLowerCase();
+  for (const [keys, icon] of ICON_KEYWORDS) {
+    if (keys.some(k => l.includes(k))) return icon;
+  }
+  return ICON_CHOICES[existingCount % ICON_CHOICES.length];
+}
+function autoPickColor(existingCount) {
+  return COLOR_CHOICES[existingCount % COLOR_CHOICES.length];
+}
+
+// ── Manage Categories & Presets (master) ──────────────────────────────────────
+function ManageCategoriesModal({ visible, onClose, categories, onChanged }) {
+  const [busy, setBusy]   = useState(false);
+  const [error, setError] = useState('');
+  const [expanded, setExpanded] = useState(null); // category id whose presets are open
+
+  // Category editor state
+  const [catForm, setCatForm] = useState(null); // { id?, label, icon, color }
+  // Preset editor state
+  const [presetForm, setPresetForm] = useState(null); // { id?, category_id, title, note, repeat_type }
+
+  const scrollRef = useRef(null);
+
+  React.useEffect(() => {
+    if (visible) { setError(''); setCatForm(null); setPresetForm(null); setExpanded(null); }
+  }, [visible]);
+
+  // When a sub-form opens, scroll to the bottom so it's visible
+  React.useEffect(() => {
+    if (catForm || presetForm) {
+      setTimeout(() => scrollRef.current?.scrollToEnd?.({ animated: true }), 50);
+    }
+  }, [catForm, presetForm]);
+
+  const run = async (fn) => {
+    setBusy(true); setError('');
+    try { await fn(); await onChanged(); }
+    catch (e) { setError(e?.error || e?.message || 'Operation failed.'); }
+    finally { setBusy(false); }
+  };
+
+  const saveCategory = () => {
+    const label = catForm?.label?.trim();
+    if (!label) { setError('Category name is required.'); return; }
+    run(async () => {
+      if (catForm.id) {
+        // editing — keep existing icon/colour, only update the name
+        await api.put(`/reminder-masters/categories/${catForm.id}`, { label });
+      } else {
+        // creating — auto-assign icon (keyword-matched) & colour
+        const count = (categories || []).filter(c => c.id != null).length;
+        await api.post('/reminder-masters/categories', {
+          label,
+          icon:  autoPickIcon(label, count),
+          color: autoPickColor(count),
+        });
+      }
+      setCatForm(null);
+    });
+  };
+
+  const deleteCategory = (cat) => {
+    if (!confirm(`Delete category "${cat.label}" and all its quick-select presets?`)) return;
+    run(async () => { await api.delete(`/reminder-masters/categories/${cat.id}`); });
+  };
+
+  const savePreset = () => {
+    if (!presetForm?.title?.trim()) { setError('Preset title is required.'); return; }
+    run(async () => {
+      const body = { title: presetForm.title.trim(), note: presetForm.note, repeat_type: presetForm.repeat_type, category_id: presetForm.category_id };
+      if (presetForm.id) await api.put(`/reminder-masters/presets/${presetForm.id}`, body);
+      else               await api.post('/reminder-masters/presets', body);
+      setPresetForm(null);
+    });
+  };
+
+  const deletePreset = (preset) => {
+    if (!confirm(`Delete quick-select "${preset.title}"?`)) return;
+    run(async () => { await api.delete(`/reminder-masters/presets/${preset.id}`); });
+  };
+
+  // Only real DB categories have numeric ids; fallback "Custom" has none
+  const dbCats = (categories || []).filter(c => c.id != null);
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={fm.overlay} onPress={onClose}>
+        <Pressable style={[fm.card, { maxWidth: 560, maxHeight: '90%' }]} onPress={e => e.stopPropagation?.()}>
+          <View style={fm.header}>
+            <View style={[fm.catIcon, { backgroundColor: Colors.primary + '18', marginRight: 8 }]}>
+              <Ionicons name="settings-outline" size={14} color={Colors.primary} />
+            </View>
+            <Text style={[fm.title, { flex: 1 }]}>Manage Categories & Quick-Select</Text>
+            <TouchableOpacity onPress={onClose} style={fm.closeBtn}>
+              <Ionicons name="close" size={20} color="#64748B" />
+            </TouchableOpacity>
+          </View>
+
+          {!!error && (
+            <View style={fm.errBox}>
+              <Ionicons name="alert-circle-outline" size={13} color="#DC2626" />
+              <Text style={fm.errTxt}>{error}</Text>
+            </View>
+          )}
+
+          <ScrollView ref={scrollRef} style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 4 }} showsVerticalScrollIndicator>
+            {dbCats.map(cat => (
+              <View key={cat.id} style={mc.catRow}>
+                <View style={mc.catHead}>
+                  <View style={[fm.catIcon, { backgroundColor: cat.color + '18' }]}>
+                    <Ionicons name={cat.icon} size={14} color={cat.color} />
+                  </View>
+                  <Text style={[mc.catLabel, { color: cat.color }]}>{cat.label}</Text>
+                  <Text style={mc.presetCount}>{(cat.presets || []).length}</Text>
+                  <TouchableOpacity style={mc.iconBtn} onPress={() => setExpanded(expanded === cat.id ? null : cat.id)}>
+                    <Ionicons name={expanded === cat.id ? 'chevron-up' : 'chevron-down'} size={15} color="#64748B" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={mc.iconBtn} onPress={() => setCatForm({ id: cat.id, label: cat.label, icon: cat.icon, color: cat.color })}>
+                    <Ionicons name="pencil-outline" size={14} color="#1D4ED8" />
+                  </TouchableOpacity>
+                  <TouchableOpacity style={mc.iconBtn} onPress={() => deleteCategory(cat)}>
+                    <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                  </TouchableOpacity>
+                </View>
+
+                {expanded === cat.id && (
+                  <View style={mc.presetWrap}>
+                    {(cat.presets || []).map(p => (
+                      <View key={p.id} style={mc.presetRow}>
+                        <Ionicons name="ellipse" size={6} color={cat.color} style={{ marginRight: 6 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={mc.presetTitle} numberOfLines={1}>{p.title}</Text>
+                          {!!p.note && <Text style={mc.presetNote} numberOfLines={1}>{p.note}</Text>}
+                        </View>
+                        <Text style={mc.repeatTag}>{p.repeat_type !== 'none' ? p.repeat_type : ''}</Text>
+                        <TouchableOpacity style={mc.iconBtn} onPress={() => setPresetForm({ id: p.id, category_id: cat.id, title: p.title, note: p.note || '', repeat_type: p.repeat_type || 'none' })}>
+                          <Ionicons name="pencil-outline" size={13} color="#1D4ED8" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={mc.iconBtn} onPress={() => deletePreset(p)}>
+                          <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                    <TouchableOpacity style={mc.addPresetBtn} onPress={() => setPresetForm({ category_id: cat.id, title: '', note: '', repeat_type: 'none' })}>
+                      <Ionicons name="add" size={14} color={Colors.primary} />
+                      <Text style={mc.addPresetTxt}>Add quick-select</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            ))}
+
+            <TouchableOpacity style={mc.addCatBtn} onPress={() => setCatForm({ label: '' })}>
+              <Ionicons name="add-circle-outline" size={16} color={Colors.primary} />
+              <Text style={mc.addCatTxt}>Add Category</Text>
+            </TouchableOpacity>
+
+          {/* Category sub-form */}
+          {catForm && (
+            <View style={mc.subForm}>
+              <View style={mc.subHead}>
+                <Text style={[mc.subTitle, { flex: 1, marginBottom: 0 }]}>{catForm.id ? 'Edit Category' : 'New Category'}</Text>
+                <TouchableOpacity onPress={() => setCatForm(null)} style={mc.subClose} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                  <Ionicons name="close" size={16} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+              <TextInput style={fm.input} placeholder="Category name" placeholderTextColor="#94A3B8"
+                value={catForm.label} onChangeText={t => setCatForm(f => ({ ...f, label: t }))} />
+              <View style={mc.subActions}>
+                <TouchableOpacity style={fm.cancelBtn} onPress={() => setCatForm(null)}><Text style={fm.cancelTxt}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity style={[fm.saveBtn, busy && { opacity: 0.6 }]} onPress={saveCategory} disabled={busy}>
+                  {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={fm.saveTxt}>Save</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Preset sub-form */}
+          {presetForm && (
+            <View style={mc.subForm}>
+              <View style={mc.subHead}>
+                <Text style={[mc.subTitle, { flex: 1, marginBottom: 0 }]}>{presetForm.id ? 'Edit Quick-Select' : 'New Quick-Select'}</Text>
+                <TouchableOpacity onPress={() => setPresetForm(null)} style={mc.subClose} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                  <Ionicons name="close" size={16} color="#64748B" />
+                </TouchableOpacity>
+              </View>
+              <TextInput style={fm.input} placeholder="Title (e.g. GST Return Filing)" placeholderTextColor="#94A3B8"
+                value={presetForm.title} onChangeText={t => setPresetForm(f => ({ ...f, title: t }))} />
+              <TextInput style={[fm.input, { marginTop: 8 }]} placeholder="Note (optional)" placeholderTextColor="#94A3B8"
+                value={presetForm.note} onChangeText={t => setPresetForm(f => ({ ...f, note: t }))} />
+              <Text style={mc.pickLabel}>Default repeat</Text>
+              <View style={fm.repeatGrid}>
+                {REPEAT_OPTIONS.map(r => (
+                  <TouchableOpacity key={r.value}
+                    style={[fm.repeatBtn, presetForm.repeat_type === r.value && { borderColor: REPEAT_COLOR[r.value], backgroundColor: REPEAT_COLOR[r.value] + '15' }]}
+                    onPress={() => setPresetForm(f => ({ ...f, repeat_type: r.value }))}>
+                    <Ionicons name={r.icon} size={13} color={presetForm.repeat_type === r.value ? REPEAT_COLOR[r.value] : '#94A3B8'} />
+                    <Text style={[fm.repeatTxt, presetForm.repeat_type === r.value && { color: REPEAT_COLOR[r.value], fontWeight: '700' }]}>{r.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={mc.subActions}>
+                <TouchableOpacity style={fm.cancelBtn} onPress={() => setPresetForm(null)}><Text style={fm.cancelTxt}>Cancel</Text></TouchableOpacity>
+                <TouchableOpacity style={[fm.saveBtn, busy && { opacity: 0.6 }]} onPress={savePreset} disabled={busy}>
+                  {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={fm.saveTxt}>Save</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const mc = StyleSheet.create({
+  catRow:       { borderWidth: 1, borderColor: '#E5E7EB', borderRadius: 12, marginBottom: 8, overflow: 'hidden' },
+  catHead:      { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 10, backgroundColor: '#FAFBFC' },
+  catLabel:     { fontSize: 13, fontWeight: '700', flex: 1 },
+  presetCount:  { fontSize: 11, color: '#94A3B8', fontWeight: '600', backgroundColor: '#F1F5F9', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+  iconBtn:      { width: 28, height: 28, borderRadius: 8, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#E5E7EB' },
+  presetWrap:   { padding: 8, gap: 4, backgroundColor: '#fff' },
+  presetRow:    { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 6, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: '#F5F6F8' },
+  presetTitle:  { fontSize: 12, fontWeight: '600', color: '#1E293B' },
+  presetNote:   { fontSize: 10, color: '#94A3B8' },
+  repeatTag:    { fontSize: 10, color: '#94A3B8', fontStyle: 'italic', marginRight: 4 },
+  addPresetBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 8, paddingHorizontal: 6 },
+  addPresetTxt: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  addCatBtn:    { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed', borderColor: Colors.primary + '60', marginTop: 4, marginBottom: 4 },
+  addCatTxt:    { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  subForm:      { borderTopWidth: 1, borderTopColor: '#E5E7EB', marginTop: 12, paddingTop: 12 },
+  subHead:      { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  subClose:     { width: 26, height: 26, borderRadius: 13, backgroundColor: '#F1F5F9', justifyContent: 'center', alignItems: 'center' },
+  subTitle:     { fontSize: 12, fontWeight: '800', color: '#1E293B', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  pickLabel:    { fontSize: 11, fontWeight: '700', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 10, marginBottom: 6 },
+  subActions:   { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 },
+});
+
 // ── Main Screen ───────────────────────────────────────────────────────────────
 const REPEAT_LABEL = { none: '', daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly', yearly: 'Yearly' };
 
 // Map a reminder title back to its category for the icon/color on cards
-function getCatForTitle(title) {
-  for (const cat of CATEGORIES) {
-    if (cat.presets.some(p => p.title === title)) return cat;
+function getCatForTitle(title, cats) {
+  const list = cats && cats.length ? cats : FALLBACK_CATEGORIES;
+  for (const cat of list) {
+    if ((cat.presets || []).some(p => p.title === title)) return cat;
   }
-  return CATEGORIES[CATEGORIES.length - 1]; // Custom
+  return list[list.length - 1]; // last = Custom fallback
 }
 
 export default function RemindersScreen({ navigation }) {
@@ -500,14 +782,38 @@ export default function RemindersScreen({ navigation }) {
   const showSwipe   = isMobile;
   const showInlineActions = !isMobile;
 
+  const role        = useAuthStore(s => s.role);
+  const isAdmin     = role === 'admin';
+
   const [reminders, setReminders]     = useState([]);
+  const [categories, setCategories]   = useState(FALLBACK_CATEGORIES);
+  const [staff, setStaff]             = useState([]);
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
   const [formVisible, setFormVisible] = useState(false);
+  const [manageVisible, setManageVisible] = useState(false);
   const [editing, setEditing]         = useState(null);
   const [filter, setFilter]           = useState('upcoming');
   const [search, setSearch]           = useState('');
   const [filterOpen, setFilterOpen]   = useState(false);
+
+  const loadCategories = useCallback(async () => {
+    try {
+      const data = await api.get('/reminder-masters');
+      if (Array.isArray(data) && data.length) {
+        // normalise preset note: backend stores null, form expects string
+        setCategories(data.map(c => ({ ...c, presets: (c.presets || []).map(p => ({ ...p, note: p.note || '', repeat: p.repeat_type })) })));
+      }
+    } catch { /* keep fallback */ }
+  }, []);
+
+  const loadStaff = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const data = await api.get('/staff');
+      setStaff(Array.isArray(data) ? data.filter(u => u.status !== 'inactive') : []);
+    } catch { /* ignore */ }
+  }, [isAdmin]);
 
   const load = useCallback(async () => {
     try {
@@ -517,7 +823,7 @@ export default function RemindersScreen({ navigation }) {
     finally { setLoading(false); setRefreshing(false); }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(useCallback(() => { load(); loadCategories(); loadStaff(); }, [load, loadCategories, loadStaff]));
 
   const handleSave = async (payload) => {
     if (editing) {
@@ -561,6 +867,22 @@ export default function RemindersScreen({ navigation }) {
     else                                     groups.Later.push(r);
   });
 
+  // Reminders is an admin-only feature. Block direct/deep-link access by non-admins.
+  if (!isAdmin) {
+    return (
+      <View style={s.screen}>
+        <Navbar navigation={navigation} activeTab="Reminders" />
+        <View style={[s.empty, { paddingVertical: 80 }]}>
+          <View style={s.emptyIconBox}>
+            <Ionicons name="lock-closed-outline" size={44} color="#C0392B" />
+          </View>
+          <Text style={s.emptyTxt}>Admins only</Text>
+          <Text style={s.emptySub}>You don't have access to Reminders.{'\n'}Assigned items appear in your Tasks tab.</Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={s.screen}>
       <Navbar navigation={navigation} activeTab="Reminders" />
@@ -570,15 +892,6 @@ export default function RemindersScreen({ navigation }) {
         contentContainerStyle={s.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} colors={[Colors.primary]} />}
       >
-        {/* Header */}
-        {!isMobile && (
-          <View style={s.pageHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.pageTitle}>Reminders</Text>
-              <Text style={s.pageSub}>GST returns, duty payments, bills, licences & more</Text>
-            </View>
-          </View>
-        )}
 
 
         {/* Search + Filter row */}
@@ -630,6 +943,13 @@ export default function RemindersScreen({ navigation }) {
             )}
           </View>
 
+          {isAdmin && (
+            <TouchableOpacity style={s.manageBtn} onPress={() => setManageVisible(true)}>
+              <Ionicons name="settings-outline" size={16} color="#475569" />
+              {!isMobile && <Text style={s.manageBtnTxt}>Manage</Text>}
+            </TouchableOpacity>
+          )}
+
           {!isMobile && (
             <TouchableOpacity style={s.newBtn} onPress={() => { setEditing(null); setFormVisible(true); }}>
               <Ionicons name="add" size={18} color="#fff" />
@@ -671,7 +991,7 @@ export default function RemindersScreen({ navigation }) {
                   const dt       = dayjs(r.next_trigger || r.remind_at);
                   const repColor = REPEAT_COLOR[r.repeat_type] || '#94A3B8';
                   const repLabel = REPEAT_LABEL[r.repeat_type];
-                  const cat      = getCatForTitle(r.title);
+                  const cat      = getCatForTitle(r.title, categories);
                   const accentColor = r.is_done ? '#94A3B8' : isOverdue ? '#DC2626' : cat.color;
 
                   const renderCardContent = () => (
@@ -694,9 +1014,24 @@ export default function RemindersScreen({ navigation }) {
                       <View style={s.cardBody}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
                           <Text style={[s.cardTitle, r.is_done && s.cardTitleDone]} numberOfLines={1}>{r.title}</Text>
-                          {isOverdue && (
+                          {r.is_done ? (
+                            <View style={[s.statusBadge, { backgroundColor: '#DCFCE7' }]}>
+                              <Ionicons name="checkmark-circle" size={10} color="#16A34A" />
+                              <Text style={[s.statusBadgeTxt, { color: '#16A34A' }]}>Completed</Text>
+                            </View>
+                          ) : isOverdue ? (
                             <View style={s.overdueBadge}>
                               <Text style={s.overdueBadgeTxt}>Overdue</Text>
+                            </View>
+                          ) : r.task_created ? (
+                            <View style={[s.statusBadge, { backgroundColor: '#FEF3C7' }]}>
+                              <Ionicons name="hourglass-outline" size={10} color="#B45309" />
+                              <Text style={[s.statusBadgeTxt, { color: '#B45309' }]}>Task sent</Text>
+                            </View>
+                          ) : (
+                            <View style={[s.statusBadge, { backgroundColor: '#E0E7FF' }]}>
+                              <Ionicons name="time-outline" size={10} color="#4338CA" />
+                              <Text style={[s.statusBadgeTxt, { color: '#4338CA' }]}>Pending</Text>
                             </View>
                           )}
                         </View>
@@ -715,6 +1050,12 @@ export default function RemindersScreen({ navigation }) {
                             <View style={[s.repeatBadge, { backgroundColor: repColor + '18' }]}>
                               <Ionicons name="repeat-outline" size={10} color={repColor} />
                               <Text style={[s.repeatBadgeTxt, { color: repColor }]}>{repLabel}</Text>
+                            </View>
+                          )}
+                          {!!r.assignee_name && (
+                            <View style={s.assigneeBadge}>
+                              <Ionicons name="person-outline" size={10} color="#1D4ED8" />
+                              <Text style={s.assigneeBadgeTxt}>{r.assignee_name}</Text>
                             </View>
                           )}
                         </View>
@@ -768,6 +1109,16 @@ export default function RemindersScreen({ navigation }) {
         onClose={() => { setFormVisible(false); setEditing(null); }}
         onSave={handleSave}
         editing={editing}
+        categories={categories}
+        isAdmin={isAdmin}
+        staff={staff}
+      />
+
+      <ManageCategoriesModal
+        visible={manageVisible}
+        onClose={() => setManageVisible(false)}
+        categories={categories}
+        onChanged={loadCategories}
       />
     </View>
   );
@@ -782,6 +1133,8 @@ const s = StyleSheet.create({
   pageTitle:   { fontSize: 20, fontWeight: '800', color: '#1E293B' },
   pageSub:     { fontSize: 12, color: '#64748B', marginTop: 2 },
   newBtn:      { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  manageBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#fff', borderWidth: 1, borderColor: '#E2E8F0', paddingHorizontal: 12, height: 40, borderRadius: 10, justifyContent: 'center' },
+  manageBtnTxt:{ fontSize: 13, fontWeight: '700', color: '#475569' },
   fabWrap:     { position: 'fixed', bottom: 80, right: 20, zIndex: 999, pointerEvents: 'box-none' },
   fab:         { width: 54, height: 54, borderRadius: 27, backgroundColor: Colors.primary, justifyContent: 'center', alignItems: 'center', elevation: 6, shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 8 },
   newBtnTxt:   { fontSize: 14, fontWeight: '700', color: '#fff' },
@@ -848,8 +1201,12 @@ const s = StyleSheet.create({
   cardTime:    { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
   repeatBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10 },
   repeatBadgeTxt: { fontSize: 10, fontWeight: '700' },
+  assigneeBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 10, backgroundColor: '#EFF6FF' },
+  assigneeBadgeTxt: { fontSize: 10, fontWeight: '700', color: '#1D4ED8' },
   overdueBadge:   { backgroundColor: '#FEE2E2', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
   overdueBadgeTxt:{ fontSize: 10, fontWeight: '700', color: '#DC2626' },
+  statusBadge:    { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+  statusBadgeTxt: { fontSize: 10, fontWeight: '700' },
 
   cardActions: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 14 },
   editBtn:     { width: 32, height: 32, borderRadius: 10, backgroundColor: '#EFF6FF', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#DBEAFE' },
